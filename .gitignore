@@ -1,0 +1,12 @@
+.env
+__pycache__
+.venv
+*.pyc
+data/
+*.egg-info
+.pytest_cache
+node_modules/
+dist/
+build/
+.astra_builds/
+.astra_exports/
