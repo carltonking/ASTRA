@@ -6,8 +6,10 @@ from datetime import datetime, timezone, timedelta
 from dataclasses import asdict
 from unittest.mock import MagicMock, patch
 
+import pandas as pd
 import pytest
 
+from astra.llm.provider import LLMProvider
 from astra.planner.spec import StrategySpec
 from astra.builder.generator import BuildResult
 from astra.pipeline import (
@@ -22,6 +24,7 @@ from astra.pipeline import (
     ReviewVerdict,
 )
 from astra.pipeline.runner import DISCLAIMER as RUNNER_DISCLAIMER
+from unittest.mock import patch, MagicMock
 
 
 def _make_spec(**overrides) -> StrategySpec:
@@ -215,24 +218,45 @@ class TestAuroraBridge:
         bridge = AuroraBridge(data_dir="/tmp/aurora_data")
         assert bridge.data_dir == "/tmp/aurora_data"
 
-    def test_check_available_returns_false_when_not_installed(self):
+    def test_check_available_returns_true_with_backtest_engine(self):
         bridge = AuroraBridge()
-        assert bridge.check_available() is False
+        assert bridge.check_available() is True
 
-    def test_methods_raise_when_not_available(self):
+    def test_download_data_works_without_aurora(self):
         bridge = AuroraBridge()
-        with pytest.raises(RuntimeError, match="AURORA is not installed"):
-            bridge.download_data(symbols=["SPY"], start="2020-01-01", end="2023-12-31")
-        with pytest.raises(RuntimeError, match="AURORA is not installed"):
-            bridge.run_leakage_detection()
-        with pytest.raises(RuntimeError, match="AURORA is not installed"):
-            bridge.build_features(cache_key="test")
-        with pytest.raises(RuntimeError, match="AURORA is not installed"):
-            bridge.generate_signals()
-        with pytest.raises(RuntimeError, match="AURORA is not installed"):
-            bridge.run_cpcv_backtest()
-        with pytest.raises(RuntimeError, match="AURORA is not installed"):
-            bridge.run_review_board()
+        key = bridge.download_data(symbols=["SPY"], start="2020-01-01", end="2023-12-31", source="yfinance")
+        assert key == "yfinance_SPY_2020-01-01_2023-12-31"
+        cached = bridge.get_cached_data(key)
+        assert cached is not None
+        assert "SPY" in cached
+
+    def test_download_data_caches_results(self):
+        bridge = AuroraBridge()
+        key = bridge.download_data(symbols=["AAPL"], start="2020-01-01", end="2020-01-10", source="yfinance")
+        cached = bridge.get_cached_data(key)
+        assert cached is not None
+        assert isinstance(cached["AAPL"], pd.DataFrame)
+        assert not cached["AAPL"].empty
+
+    def test_get_cached_data_returns_none_for_missing_key(self):
+        bridge = AuroraBridge()
+        assert bridge.get_cached_data("nonexistent") is None
+
+    def test_builtin_engine_produces_leakage_verdict(self):
+        bridge = AuroraBridge()
+        verdict = bridge.run_leakage_detection()
+        assert verdict.status in ("CLEAN", "SUSPECT", "COMPROMISED")
+
+    def test_builtin_engine_produces_cpcv_result(self):
+        bridge = AuroraBridge()
+        result = bridge.run_cpcv_backtest()
+        assert hasattr(result, "mean_sharpe")
+        assert hasattr(result, "dsr")
+
+    def test_builtin_engine_produces_review_verdict(self):
+        bridge = AuroraBridge()
+        verdict = bridge.run_review_board()
+        assert verdict.status in ("APPROVED", "REJECTED", "NEEDS_MORE_RESEARCH")
 
 
 # ---------------------------------------------------------------------------
@@ -254,6 +278,7 @@ class MockAuroraBridge:
         self.available = True
         self.leakage_verdict = "CLEAN"
         self.review_verdict = "APPROVED"
+        self._data_cache: dict[str, dict[str, pd.DataFrame]] = {}
 
     def check_available(self) -> bool:
         self.check_available_calls += 1
@@ -261,7 +286,11 @@ class MockAuroraBridge:
 
     def download_data(self, symbols, start, end, source="yfinance"):
         self.download_data_calls.append((symbols, start, end, source))
-        return "data_key_123"
+        key = f"{source}_{'_'.join(symbols)}_{start}_{end}"
+        return key
+
+    def get_cached_data(self, key: str) -> dict[str, pd.DataFrame] | None:
+        return self._data_cache.get(key)
 
     def run_leakage_detection(self, feature_key="", label_key=""):
         self.run_leakage_detection_calls.append((feature_key, label_key))
@@ -275,7 +304,7 @@ class MockAuroraBridge:
         self.generate_signals_calls.append((strategy_file, config_file, features_key))
         return f"signals_{features_key}"
 
-    def run_cpcv_backtest(self, signals_key="", n_splits=6, n_test_splits=2, purge_days=21, embargo_days=5):
+    def run_cpcv_backtest(self, signals_key="", n_splits=6, n_test_splits=2, purge_days=21, embargo_days=5, transaction_cost=0.0, portfolio_weights=None):
         self.run_cpcv_backtest_calls.append((signals_key, n_splits))
         return CPCVResult(
             mean_sharpe=0.55,
@@ -285,43 +314,34 @@ class MockAuroraBridge:
             path_distribution={"mean": 0.55, "std": 0.18},
         )
 
-    def run_review_board(self, run_dir=""):
-        self.run_review_board_calls.append(run_dir)
+    def run_review_board(self, run_dir="", cpcv_result=None):
+        self.run_review_board_calls.append((run_dir, cpcv_result))
         return ReviewVerdict(status=self.review_verdict, details="mock review")
 
 
 class TestPipelineRunner:
-    def test_initializes_with_required_params(self):
-        runner = PipelineRunner(
-            anthropic_api_key="test",
+    def _make_runner(self, **kwargs) -> PipelineRunner:
+        defaults = dict(
+            llm_provider=MagicMock(spec=LLMProvider),
             alpaca_paper_key="test",
             alpaca_paper_secret="test",
             alpaca_base_url="https://paper-api.alpaca.markets",
             build_dir="/tmp/astra",
         )
+        defaults.update(kwargs)
+        return PipelineRunner(**defaults)
+
+    def test_initializes_with_required_params(self):
+        runner = self._make_runner()
         assert runner._max_optimization_cycles == 10
 
     def test_initializes_with_custom_max_cycles(self):
-        runner = PipelineRunner(
-            anthropic_api_key="test",
-            alpaca_paper_key="test",
-            alpaca_paper_secret="test",
-            alpaca_base_url="https://paper-api.alpaca.markets",
-            build_dir="/tmp/astra",
-            max_optimization_cycles=5,
-        )
+        runner = self._make_runner(max_optimization_cycles=5)
         assert runner._max_optimization_cycles == 5
 
     def test_run_returns_passed_when_aurora_available(self):
         mock_bridge = MockAuroraBridge()
-        runner = PipelineRunner(
-            anthropic_api_key="test",
-            alpaca_paper_key="test",
-            alpaca_paper_secret="test",
-            alpaca_base_url="https://paper-api.alpaca.markets",
-            build_dir="/tmp/astra",
-            aurora_bridge=mock_bridge,
-        )
+        runner = self._make_runner(aurora_bridge=mock_bridge)
         spec = _make_spec()
         build_result = _make_build_result(spec)
         result = runner.run(build_result, spec)
@@ -332,35 +352,21 @@ class TestPipelineRunner:
         assert result.paper_deployment_id is not None
         assert result.error is None
 
-    def test_run_fails_when_aurora_not_available(self):
+    def test_run_succeeds_with_builtin_engine(self):
+        """Pipeline runner now succeeds even without AURORA (uses BacktestEngine)."""
         mock_bridge = MockAuroraBridge()
         mock_bridge.available = False
-        runner = PipelineRunner(
-            anthropic_api_key="test",
-            alpaca_paper_key="test",
-            alpaca_paper_secret="test",
-            alpaca_base_url="https://paper-api.alpaca.markets",
-            build_dir="/tmp/astra",
-            aurora_bridge=mock_bridge,
-        )
+        runner = self._make_runner(aurora_bridge=mock_bridge)
         spec = _make_spec()
         build_result = _make_build_result(spec)
         result = runner.run(build_result, spec)
 
-        assert result.status == "ERROR"
-        assert "not available" in (result.error or "")
+        assert result.status == "DEPLOYED_PAPER"
 
     def test_run_fails_on_leakage_compromised(self):
         mock_bridge = MockAuroraBridge()
         mock_bridge.leakage_verdict = "COMPROMISED"
-        runner = PipelineRunner(
-            anthropic_api_key="test",
-            alpaca_paper_key="test",
-            alpaca_paper_secret="test",
-            alpaca_base_url="https://paper-api.alpaca.markets",
-            build_dir="/tmp/astra",
-            aurora_bridge=mock_bridge,
-        )
+        runner = self._make_runner(aurora_bridge=mock_bridge)
         spec = _make_spec()
         build_result = _make_build_result(spec)
         result = runner.run(build_result, spec)
@@ -371,14 +377,7 @@ class TestPipelineRunner:
     def test_run_fails_on_review_rejected(self):
         mock_bridge = MockAuroraBridge()
         mock_bridge.review_verdict = "REJECTED"
-        runner = PipelineRunner(
-            anthropic_api_key="test",
-            alpaca_paper_key="test",
-            alpaca_paper_secret="test",
-            alpaca_base_url="https://paper-api.alpaca.markets",
-            build_dir="/tmp/astra",
-            aurora_bridge=mock_bridge,
-        )
+        runner = self._make_runner(aurora_bridge=mock_bridge)
         spec = _make_spec()
         build_result = _make_build_result(spec)
         result = runner.run(build_result, spec)
@@ -388,14 +387,7 @@ class TestPipelineRunner:
 
     def test_run_populates_cpcv_summary(self):
         mock_bridge = MockAuroraBridge()
-        runner = PipelineRunner(
-            anthropic_api_key="test",
-            alpaca_paper_key="test",
-            alpaca_paper_secret="test",
-            alpaca_base_url="https://paper-api.alpaca.markets",
-            build_dir="/tmp/astra",
-            aurora_bridge=mock_bridge,
-        )
+        runner = self._make_runner(aurora_bridge=mock_bridge)
         spec = _make_spec()
         build_result = _make_build_result(spec)
         result = runner.run(build_result, spec)
@@ -415,14 +407,7 @@ class TestPipelineRunner:
             _make_spec(), success=True
         )
 
-        runner = PipelineRunner(
-            anthropic_api_key="test",
-            alpaca_paper_key="test",
-            alpaca_paper_secret="test",
-            alpaca_base_url="https://paper-api.alpaca.markets",
-            build_dir="/tmp/astra",
-            aurora_bridge=mock_bridge,
-        )
+        runner = self._make_runner(aurora_bridge=mock_bridge)
         spec = _make_spec()
         build_result = _make_build_result(spec)
         result = runner.run_optimization_cycle(
@@ -441,14 +426,7 @@ class TestPipelineRunner:
             _make_spec(), success=False, error="Build failed"
         )
 
-        runner = PipelineRunner(
-            anthropic_api_key="test",
-            alpaca_paper_key="test",
-            alpaca_paper_secret="test",
-            alpaca_base_url="https://paper-api.alpaca.markets",
-            build_dir="/tmp/astra",
-            aurora_bridge=mock_bridge,
-        )
+        runner = self._make_runner(aurora_bridge=mock_bridge)
         spec = _make_spec()
         build_result = _make_build_result(spec)
         result = runner.run_optimization_cycle(
@@ -459,25 +437,12 @@ class TestPipelineRunner:
         assert "Build failed" in (result.error or "")
 
     def test_runner_creates_event_bus_by_default(self):
-        runner = PipelineRunner(
-            anthropic_api_key="test",
-            alpaca_paper_key="test",
-            alpaca_paper_secret="test",
-            alpaca_base_url="https://paper-api.alpaca.markets",
-            build_dir="/tmp/astra",
-        )
+        runner = self._make_runner()
         assert runner._event_bus is not None
 
     def test_runner_accepts_external_event_bus(self):
         bus = PipelineEventBus()
-        runner = PipelineRunner(
-            anthropic_api_key="test",
-            alpaca_paper_key="test",
-            alpaca_paper_secret="test",
-            alpaca_base_url="https://paper-api.alpaca.markets",
-            build_dir="/tmp/astra",
-            event_bus=bus,
-        )
+        runner = self._make_runner(event_bus=bus)
         assert runner._event_bus is bus
 
 

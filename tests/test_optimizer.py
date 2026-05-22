@@ -4,10 +4,11 @@ import json
 import uuid
 from dataclasses import asdict
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
+from astra.llm.provider import LLMProvider
 from astra.planner.spec import StrategySpec
 from astra.builder.generator import BuildResult
 from astra.pipeline.runner import PipelineResult, PipelineRunner
@@ -238,9 +239,16 @@ class TestParameterProposal:
 # ---------------------------------------------------------------------------
 
 
+def _make_mock_provider(response_text: str) -> MagicMock:
+    """Build a mock LLMProvider that returns the given text from generate()."""
+    mock_provider = MagicMock(spec=LLMProvider)
+    mock_provider.generate.return_value = response_text
+    return mock_provider
+
+
 class TestParameterProposer:
     def test_returns_extend_observation_for_insufficient_data(self):
-        proposer = ParameterProposer(anthropic_api_key="test")
+        proposer = ParameterProposer(llm_provider=MagicMock(spec=LLMProvider))
         spec = _make_spec()
         build = _make_build_result(spec)
 
@@ -264,7 +272,7 @@ class TestParameterProposer:
         assert proposal.parameter_changes == {}
 
     def test_returns_abandon_for_failed_diagnosis(self):
-        proposer = ParameterProposer(anthropic_api_key="test")
+        proposer = ParameterProposer(llm_provider=MagicMock(spec=LLMProvider))
         spec = _make_spec()
         build = _make_build_result(spec)
 
@@ -287,7 +295,7 @@ class TestParameterProposer:
         assert proposal.action == "ABANDON"
 
     def test_returns_rebuild_for_signal_decay(self):
-        proposer = ParameterProposer(anthropic_api_key="test")
+        proposer = ParameterProposer(llm_provider=MagicMock(spec=LLMProvider))
         spec = _make_spec()
         build = _make_build_result(spec)
 
@@ -309,13 +317,8 @@ class TestParameterProposer:
 
         assert proposal.action == "REBUILD_STRATEGY"
 
-    @patch("astra.optimizer.proposer.Anthropic")
-    def test_uses_claude_for_adjust_parameters(self, MockAnthropic):
-        mock_client = MagicMock()
-        MockAnthropic.return_value = mock_client
-
-        content_block = MagicMock()
-        content_block.text = json.dumps({
+    def test_uses_llm_for_adjust_parameters(self):
+        mock_provider = _make_mock_provider(json.dumps({
             "action": "ADJUST_PARAMETERS",
             "parameter_changes": {"fast_window": 15, "slow_window": 40},
             "reasoning": {
@@ -324,10 +327,9 @@ class TestParameterProposer:
             },
             "summary": "Adjusting trend windows to improve responsiveness.",
             "confidence": 0.65,
-        })
-        mock_client.messages.create.return_value = MagicMock(content=[content_block])
+        }))
 
-        proposer = ParameterProposer(anthropic_api_key="test")
+        proposer = ParameterProposer(llm_provider=mock_provider)
         spec = _make_spec()
         build = _make_build_result(spec)
 
@@ -351,13 +353,11 @@ class TestParameterProposer:
         assert proposal.parameter_changes["fast_window"] == 15
         assert proposal.parameter_changes["slow_window"] == 40
 
-    @patch("astra.optimizer.proposer.Anthropic")
-    def test_claude_failure_falls_back_to_extend_observation(self, MockAnthropic):
-        mock_client = MagicMock()
-        MockAnthropic.return_value = mock_client
-        mock_client.messages.create.side_effect = Exception("API error")
+    def test_llm_failure_falls_back_to_extend_observation(self):
+        mock_provider = MagicMock(spec=LLMProvider)
+        mock_provider.generate.side_effect = Exception("API error")
 
-        proposer = ParameterProposer(anthropic_api_key="test")
+        proposer = ParameterProposer(llm_provider=mock_provider)
         spec = _make_spec()
         build = _make_build_result(spec)
 
@@ -595,7 +595,7 @@ class TestOptimizationEngine:
         pipeline_runner = MagicMock(spec=PipelineRunner)
         event_bus = PipelineEventBus()
         engine = OptimizationEngine(
-            anthropic_api_key="test",
+            llm_provider=MagicMock(spec=LLMProvider),
             pipeline_runner=pipeline_runner,
             event_bus=event_bus,
             max_cycles=5,
@@ -606,7 +606,7 @@ class TestOptimizationEngine:
         pipeline_runner = MagicMock(spec=PipelineRunner)
         event_bus = PipelineEventBus()
         engine = OptimizationEngine(
-            anthropic_api_key="test",
+            llm_provider=MagicMock(spec=LLMProvider),
             pipeline_runner=pipeline_runner,
             event_bus=event_bus,
         )
@@ -621,7 +621,7 @@ class TestOptimizationEngine:
         pipeline_runner = MagicMock(spec=PipelineRunner)
         event_bus = PipelineEventBus()
         engine = OptimizationEngine(
-            anthropic_api_key="test",
+            llm_provider=MagicMock(spec=LLMProvider),
             pipeline_runner=pipeline_runner,
             event_bus=event_bus,
             max_cycles=1,
@@ -643,7 +643,7 @@ class TestOptimizationEngine:
         pipeline_runner = MagicMock(spec=PipelineRunner)
         event_bus = PipelineEventBus()
         engine = OptimizationEngine(
-            anthropic_api_key="test",
+            llm_provider=MagicMock(spec=LLMProvider),
             pipeline_runner=pipeline_runner,
             event_bus=event_bus,
             max_cycles=10,
@@ -680,24 +680,19 @@ class TestOptimizationEngine:
         result = engine.run_optimization_loop(state, monitor)
         assert result.status == "ABANDONED"
 
-    @patch("astra.optimizer.proposer.Anthropic")
-    def test_handles_pipeline_error_in_cycle(self, MockAnthropic):
-        mock_client = MagicMock()
-        MockAnthropic.return_value = mock_client
-        content_block = MagicMock()
-        content_block.text = json.dumps({
+    def test_handles_pipeline_error_in_cycle(self):
+        mock_provider = _make_mock_provider(json.dumps({
             "action": "ADJUST_PARAMETERS",
             "parameter_changes": {"fast_window": 15},
             "reasoning": {"fast_window": "Reducing to improve responsiveness"},
             "summary": "Adjusting parameters.",
             "confidence": 0.6,
-        })
-        mock_client.messages.create.return_value = MagicMock(content=[content_block])
+        }))
 
         pipeline_runner = MagicMock(spec=PipelineRunner)
         event_bus = PipelineEventBus()
         engine = OptimizationEngine(
-            anthropic_api_key="test",
+            llm_provider=mock_provider,
             pipeline_runner=pipeline_runner,
             event_bus=event_bus,
             max_cycles=10,
@@ -741,7 +736,7 @@ class TestOptimizationEngine:
         pipeline_runner = MagicMock(spec=PipelineRunner)
         event_bus = PipelineEventBus()
         engine = OptimizationEngine(
-            anthropic_api_key="test",
+            llm_provider=MagicMock(spec=LLMProvider),
             pipeline_runner=pipeline_runner,
             event_bus=event_bus,
             max_cycles=1,

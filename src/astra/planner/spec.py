@@ -46,6 +46,7 @@ class StrategySpec:
     max_positions: int = 0
     stop_loss: float | None = None
     take_profit: float | None = None
+    transaction_cost: float = 0.001
 
     backtest_start: str = ""
     backtest_end: str = ""

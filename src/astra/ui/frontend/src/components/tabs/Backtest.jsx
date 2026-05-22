@@ -1,72 +1,216 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, ComposedChart } from 'recharts';
+import useWebSocket from '../../hooks/useWebSocket';
+
+function SectionTitle({ label }) {
+  return <div style={{ fontSize: '20px', fontWeight: 600, color: '#e8e8e8', marginBottom: '24px' }}>{label}</div>;
+}
 
 export default function Backtest({ session }) {
-  const state = session.sessionState || {};
-  const lastResult = state.pipeline_results?.[state.pipeline_results?.length - 1];
-  const backtest = lastResult?.backtest_metrics || {};
-  const cpcv = lastResult?.cpcv_summary || {};
+  const chartRef = useRef(null);
+  const [tvReady, setTvReady] = useState(false);
+  const { lastEvents } = useWebSocket(session?.sessionId);
+  const [cpcvData, setCpcvData] = useState(null);
+  const [drawdownData, setDrawdownData] = useState(null);
+  const [metrics, setMetrics] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [progress, setProgress] = useState(null);
 
-  const Badge = ({ label, good }) => (
-    <span style={{
-      padding: '2px 8px', borderRadius: '10px', fontSize: '12px', fontWeight: 600,
-      background: good ? '#1a3a1a' : '#3a1a1a',
-      color: good ? '#30d030' : '#d03030',
-      border: `1px solid ${good ? '#2a5a2a' : '#5a2a2a'}`,
-    }}>
-      {label}
-    </span>
-  );
+  // TradingView widget
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !window.TradingView) {
+      const script = document.createElement('script');
+      script.src = 'https://s3.tradingview.com/tv.js';
+      script.async = true;
+      script.onload = () => setTvReady(true);
+      document.head.appendChild(script);
+    } else if (window.TradingView) {
+      setTvReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tvReady && chartRef.current && !chartRef.current._tvWidget) {
+      const widget = new window.TradingView.widget({
+        container_id: chartRef.current.id || 'tv-chart',
+        width: '100%',
+        height: 420,
+        symbol: 'NASDAQ:AAPL',
+        interval: '15',
+        timezone: 'Etc/UTC',
+        theme: 'Dark',
+        style: '1',
+        locale: 'en',
+        toolbar_bg: '#0a0a0a',
+        enable_publishing: false,
+        hide_side_toolbar: false,
+        allow_symbol_change: true,
+        studies: ['RSI@tv-basicstudies'],
+      });
+      chartRef.current._tvWidget = widget;
+    }
+  }, [tvReady]);
+
+    // CPCV data from events + progress tracking
+  useEffect(() => {
+    const progEvent = lastEvents.find(ev => ev.event === 'pipeline.backtest_progress');
+    if (progEvent?.data) {
+      setProgress(progEvent.data);
+    }
+    const event = lastEvents.find(ev => ev.event === 'pipeline.backtest_complete');
+    if (event?.data) {
+      setProgress(null);
+      const d = event.data;
+      const cpcv = d.cpcv_summary || {};
+      setMetrics({
+        meanSharpe: cpcv.mean_sharpe ?? 0,
+        dsr: cpcv.dsr ?? 0,
+        overfitProb: cpcv.overfitting_probability ?? 0,
+        totalReturn: cpcv.annualized_return ?? 0,
+        totalTrades: cpcv.n_trades ?? 0,
+        leakageVerdict: d.leakage_verdict || 'PENDING',
+        reviewVerdict: d.review_board_status || 'PENDING',
+      });
+      const sharpes = d.sharpe_per_path;
+      if (sharpes && sharpes.length) {
+        const paths = sharpes.map((s, i) => {
+          const len = 100;
+          const vals = Array.from({ length: len }, (_, j) => 1 + (s / len) * j);
+          return { name: `Path ${i+1}`, values: vals };
+        });
+        setCpcvData(paths);
+        const dd = paths[0].values.map((v, i, a) => i === 0 ? 0 : (v - a[i-1]) / a[i-1]);
+        setDrawdownData(dd.map((d, i) => ({ period: i+1, dd: d * 100 })));
+      }
+      setLoading(false);
+    }
+  }, [lastEvents]);
+
+  const chartData = cpcvData?.[0]?.values.map((_, i) => {
+    const e = { step: i };
+    cpcvData.forEach((p, j) => { e[`p${j+1}`] = p.values[i]; });
+    return e;
+  }) || [];
+
+  const card = { background: '#161616', border: '1px solid #1e1e1e', borderRadius: '8px', padding: '20px', marginBottom: '20px' };
 
   return (
     <div>
-      <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px', color: '#e0e0e0' }}>
-        Backtest Results
-      </h2>
+      <SectionTitle label="Backtest" />
 
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-        <div style={{ background: '#1a1a3e', borderRadius: '8px', padding: '12px 16px',
-                      border: '1px solid #333', flex: 1 }}>
-          <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>Leakage</div>
-          <Badge label={lastResult?.leakage_verdict || 'N/A'}
-                 good={lastResult?.leakage_verdict === 'CLEAN'} />
+      {/* Real-time progress bar */}
+      {progress && (
+        <div style={{ background: '#161616', border: '1px solid #1e1e1e', borderRadius: '8px', padding: '16px 20px', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '12px', color: '#e8e8e8', fontWeight: 500 }}>
+              {progress.stage || 'Processing...'}
+            </span>
+            <span style={{ fontSize: '11px', color: '#555' }}>
+              {progress.current ?? 0} / {progress.total ?? 0}
+            </span>
+          </div>
+          <div style={{ width: '100%', height: '4px', background: '#1e1e1e', borderRadius: '2px', overflow: 'hidden' }}>
+            <div style={{
+              width: `${progress.total ? ((progress.current || 0) / progress.total) * 100 : 0}%`,
+              height: '100%', background: '#888', borderRadius: '2px',
+              transition: 'width 0.3s ease',
+            }} />
+          </div>
         </div>
-        <div style={{ background: '#1a1a3e', borderRadius: '8px', padding: '12px 16px',
-                      border: '1px solid #333', flex: 1 }}>
-          <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>Review Board</div>
-          <Badge label={lastResult?.review_board_status || 'N/A'}
-                 good={lastResult?.review_board_status === 'APPROVED'} />
-        </div>
+      )}
+
+      {/* TradingView chart */}
+      <div style={card}>
+        <div style={{ fontSize: '13px', fontWeight: 500, color: '#e8e8e8', marginBottom: '12px' }}>Market Overview</div>
+        <div
+          id="tv-chart"
+          ref={chartRef}
+          style={{ width: '100%', height: '420px', background: '#0a0a0a', borderRadius: '4px', overflow: 'hidden' }}
+        />
+        {!tvReady && (
+          <div style={{ textAlign: 'center', padding: '20px', color: '#555', fontSize: '11px' }}>
+            Loading chart...
+          </div>
+        )}
       </div>
 
-      <div style={{ background: '#1a1a3e', borderRadius: '8px', padding: '16px',
-                    border: '1px solid #333' }}>
-        <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: '#c0c0e0' }}>
-          Performance Metrics
-        </h3>
-        <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #333', color: '#888' }}>
-              <th style={{ padding: '6px 8px', textAlign: 'left' }}>Metric</th>
-              <th style={{ padding: '6px 8px', textAlign: 'right' }}>Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              ['Mean Sharpe Ratio', backtest.mean_sharpe],
-              ['Deflated Sharpe Ratio', backtest.dsr],
-              ['Overfitting Probability', backtest.overfitting_probability],
-              ['CPCV Paths', cpcv.n_splits],
-            ].map(([k, v]) => (
-              <tr key={k} style={{ borderBottom: '1px solid #2a2a4a' }}>
-                <td style={{ padding: '6px 8px', color: '#888' }}>{k}</td>
-                <td style={{ padding: '6px 8px', textAlign: 'right', color: '#c0c0e0' }}>
-                  {v != null ? (typeof v === 'number' ? v.toFixed(4) : v) : 'N/A'}
-                </td>
-              </tr>
+      {/* CPCV equity curves */}
+      <div style={card}>
+        <div style={{ fontSize: '13px', fontWeight: 500, color: '#e8e8e8', marginBottom: '12px' }}>CPCV Equity Curves</div>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '20px', color: '#555', fontSize: '11px' }}>AWAITING DATA</div>
+        ) : cpcvData ? (
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="2 2" stroke="#1e1e1e" />
+              <XAxis dataKey="step" stroke="#444" tick={{ fontSize: 10 }} />
+              <YAxis stroke="#444" tick={{ fontSize: 10 }} />
+              <Tooltip contentStyle={{ background: '#111', border: '1px solid #1e1e1e', borderRadius: '4px', fontSize: '11px' }} />
+              <Legend wrapperStyle={{ fontSize: '11px', color: '#888' }} />
+              {cpcvData.map((_, i) => (
+                <Line key={i} type="monotone" dataKey={`p${i+1}`}
+                  stroke={['#888', '#666', '#aaa'][i % 3]} dot={false} strokeWidth={1} />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '20px', color: '#444', fontSize: '11px' }}>No CPCV data yet</div>
+        )}
+      </div>
+
+      {/* Drawdown */}
+      <div style={card}>
+        <div style={{ fontSize: '13px', fontWeight: 500, color: '#e8e8e8', marginBottom: '12px' }}>Drawdown</div>
+        {drawdownData ? (
+          <ResponsiveContainer width="100%" height={160}>
+            <ComposedChart data={drawdownData}>
+              <CartesianGrid strokeDasharray="2 2" stroke="#1e1e1e" />
+              <XAxis dataKey="period" stroke="#444" tick={{ fontSize: 10 }} />
+              <YAxis stroke="#444" tick={{ fontSize: 10 }} />
+              <Tooltip contentStyle={{ background: '#111', border: '1px solid #1e1e1e', borderRadius: '4px', fontSize: '11px' }} />
+              <Area type="monotone" dataKey="dd" fill="#2a1a1a" stroke="#ef5350" strokeWidth={1} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '20px', color: '#444', fontSize: '11px' }}>No drawdown data</div>
+        )}
+      </div>
+
+      {/* Metrics */}
+      {metrics && (
+        <div style={card}>
+          <div style={{ fontSize: '13px', fontWeight: 500, color: '#e8e8e8', marginBottom: '16px' }}>Metrics</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+              {[
+                ['Mean Sharpe (CPCV)', metrics.meanSharpe?.toFixed(3)],
+                ['Deflated Sharpe (DSR)', metrics.dsr?.toFixed(3)],
+                ['Overfit Probability', metrics.overfitProb != null ? `${(metrics.overfitProb * 100).toFixed(1)}%` : '\u2014'],
+                ['Annualized Return', metrics.totalReturn != null ? `${(metrics.totalReturn * 100).toFixed(1)}%` : '\u2014'],
+                ['Total Trades', metrics.totalTrades != null ? metrics.totalTrades : '\u2014'],
+              ].map(([k, v]) => (
+              <div key={k} style={{ background: '#111', padding: '12px', borderRadius: '4px', borderLeft: '3px solid #555' }}>
+                <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px', fontWeight: 500 }}>{k}</div>
+                <div style={{ fontSize: '14px', fontWeight: 500, color: '#e8e8e8', fontFamily: "'JetBrains Mono', 'Fira Code', monospace" }}>{v}</div>
+              </div>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <Pill label={`Leakage: ${metrics.leakageVerdict}`} />
+            <Pill label={`Review: ${metrics.reviewVerdict}`} />
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function Pill({ label }) {
+  return (
+    <span style={{
+      padding: '3px 12px', borderRadius: '9999px', fontSize: '11px', fontWeight: 500,
+      border: '1px solid #444', color: '#aaa', background: 'transparent',
+    }}>
+      {label}
+    </span>
   );
 }

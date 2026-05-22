@@ -1,10 +1,7 @@
 """Tests for the ASTRA Alpaca paper trading integration."""
 
-import datetime
-import json
 import uuid
-from dataclasses import asdict
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -28,6 +25,7 @@ from astra.alpaca import (
 )
 from astra.pipeline.events import PipelineEventBus
 from astra.pipeline.runner import PipelineResult
+from astra.broker.base import Broker, Position, Order
 from astra.builder.generator import BuildResult
 from astra.planner.spec import StrategySpec
 
@@ -183,13 +181,14 @@ class TestAstraAlpacaClientUrlValidation:
 class TestAstraAlpacaClientMethods:
     def test_get_account_returns_stub_when_not_connected(self):
         client = AstraAlpacaClient(api_key="test", api_secret="test", base_url=PAPER_URL)
-        with pytest.raises(AlpacaConnectionError):
-            client.get_account()
+        account = client.get_account()
+        assert account.equity == 100000.0
+        assert account.cash == 75000.0
 
     def test_get_positions_returns_empty_when_not_connected(self):
         client = AstraAlpacaClient(api_key="test", api_secret="test", base_url=PAPER_URL)
-        with pytest.raises(AlpacaConnectionError):
-            client.get_positions()
+        positions = client.get_positions()
+        assert positions == []
 
 
 # ---------------------------------------------------------------------------
@@ -199,9 +198,9 @@ class TestAstraAlpacaClientMethods:
 
 class TestStrategyDeployer:
     def test_deploy_raises_on_failed_build(self):
-        client = MagicMock(spec=AstraAlpacaClient)
+        broker = MagicMock(spec=Broker)
         bus = PipelineEventBus()
-        deployer = StrategyDeployer(client=client, event_bus=bus)
+        deployer = StrategyDeployer(broker=broker, event_bus=bus)
 
         failed_build = BuildResult(
             success=False,
@@ -214,9 +213,9 @@ class TestStrategyDeployer:
             deployer.deploy(failed_build, spec, pipeline_result)
 
     def test_deploy_creates_deployment(self, tmp_path):
-        client = MagicMock(spec=AstraAlpacaClient)
+        broker = MagicMock(spec=Broker)
         bus = PipelineEventBus()
-        deployer = StrategyDeployer(client=client, event_bus=bus)
+        deployer = StrategyDeployer(broker=broker, event_bus=bus)
 
         strategy_file = str(tmp_path / "test_strat.py")
         with open(strategy_file, "w") as f:
@@ -238,12 +237,12 @@ class TestStrategyDeployer:
         assert deployment.ledger_path.endswith(".jsonl")
 
     def test_run_cycle_buy_signal_no_position(self):
-        client = MagicMock(spec=AstraAlpacaClient)
+        broker = MagicMock(spec=Broker)
         bus = PipelineEventBus()
-        deployer = StrategyDeployer(client=client, event_bus=bus)
+        deployer = StrategyDeployer(broker=broker, event_bus=bus)
 
-        client.get_positions.return_value = []
-        client.submit_order.return_value = AlpacaOrder(
+        broker.get_positions.return_value = []
+        broker.submit_order.return_value = Order(
             id="order-1", symbol="SPY", qty=1.0, side="buy", status="filled"
         )
 
@@ -273,14 +272,14 @@ class TestStrategyDeployer:
         assert deployment.total_orders == 1
 
     def test_run_cycle_flat_signal_with_position_closes(self):
-        client = MagicMock(spec=AstraAlpacaClient)
+        broker = MagicMock(spec=Broker)
         bus = PipelineEventBus()
-        deployer = StrategyDeployer(client=client, event_bus=bus)
+        deployer = StrategyDeployer(broker=broker, event_bus=bus)
 
-        client.get_positions.return_value = [
-            AlpacaPosition(symbol="SPY", qty=10.0, side="long")
+        broker.get_positions.return_value = [
+            Position(symbol="SPY", qty=10.0, side="long")
         ]
-        client.close_position.return_value = AlpacaOrder(
+        broker.close_position.return_value = Order(
             id="close-1", symbol="SPY", qty=10.0, side="sell", status="filled"
         )
 
@@ -304,15 +303,15 @@ class TestStrategyDeployer:
                 result = deployer.run_cycle(deployment)
 
         assert "CLOSE SPY" in result.actions
-        client.close_position.assert_called_once_with("SPY")
+        broker.close_position.assert_called_once_with("SPY")
 
     def test_run_cycle_long_signal_with_position_holds(self):
-        client = MagicMock(spec=AstraAlpacaClient)
+        broker = MagicMock(spec=Broker)
         bus = PipelineEventBus()
-        deployer = StrategyDeployer(client=client, event_bus=bus)
+        deployer = StrategyDeployer(broker=broker, event_bus=bus)
 
-        client.get_positions.return_value = [
-            AlpacaPosition(symbol="SPY", qty=10.0, side="long")
+        broker.get_positions.return_value = [
+            Position(symbol="SPY", qty=10.0, side="long")
         ]
 
         deployment = Deployment(
@@ -335,15 +334,15 @@ class TestStrategyDeployer:
                 result = deployer.run_cycle(deployment)
 
         assert "HOLD SPY" in result.actions
-        client.submit_order.assert_not_called()
-        client.close_position.assert_not_called()
+        broker.submit_order.assert_not_called()
+        broker.close_position.assert_not_called()
 
     def test_run_cycle_flat_signal_no_position_holds(self):
-        client = MagicMock(spec=AstraAlpacaClient)
+        broker = MagicMock(spec=Broker)
         bus = PipelineEventBus()
-        deployer = StrategyDeployer(client=client, event_bus=bus)
+        deployer = StrategyDeployer(broker=broker, event_bus=bus)
 
-        client.get_positions.return_value = []
+        broker.get_positions.return_value = []
 
         deployment = Deployment(
             deployment_id="dep-4",
@@ -365,17 +364,17 @@ class TestStrategyDeployer:
                 result = deployer.run_cycle(deployment)
 
         assert "HOLD SPY" in result.actions
-        client.submit_order.assert_not_called()
-        client.close_position.assert_not_called()
+        broker.submit_order.assert_not_called()
+        broker.close_position.assert_not_called()
 
     def test_stop_closes_all_positions(self):
-        client = MagicMock(spec=AstraAlpacaClient)
+        broker = MagicMock(spec=Broker)
         bus = PipelineEventBus()
-        deployer = StrategyDeployer(client=client, event_bus=bus)
+        deployer = StrategyDeployer(broker=broker, event_bus=bus)
 
-        client.get_positions.return_value = [
-            AlpacaPosition(symbol="SPY", qty=10.0, side="long"),
-            AlpacaPosition(symbol="QQQ", qty=5.0, side="long"),
+        broker.get_positions.return_value = [
+            Position(symbol="SPY", qty=10.0, side="long"),
+            Position(symbol="QQQ", qty=5.0, side="long"),
         ]
 
         deployment = Deployment(deployment_id="dep-5")
@@ -383,12 +382,12 @@ class TestStrategyDeployer:
 
         assert deployment.status == "STOPPED"
         assert deployment.stopped_at is not None
-        assert client.close_position.call_count == 2
+        assert broker.close_position.call_count == 2
 
     def test_deployment_ledger_path_set_correctly(self, tmp_path):
-        client = MagicMock(spec=AstraAlpacaClient)
+        broker = MagicMock(spec=Broker)
         bus = PipelineEventBus()
-        deployer = StrategyDeployer(client=client, event_bus=bus)
+        deployer = StrategyDeployer(broker=broker, event_bus=bus)
 
         strategy_file = str(tmp_path / "strategies" / "spec-1" / "strat.py")
         import os
@@ -419,14 +418,14 @@ class TestStrategyDeployer:
 
 class TestPerformanceMonitor:
     def test_snapshot_has_disclaimer(self):
-        client = MagicMock(spec=AstraAlpacaClient)
-        client.get_account.return_value = AlpacaAccount(equity=100000.0, cash=50000.0)
-        client.get_positions.return_value = []
-        client.get_portfolio_history.return_value = PortfolioHistory(
+        broker = MagicMock(spec=Broker)
+        broker.get_account.return_value = AlpacaAccount(equity=100000.0, cash=50000.0)
+        broker.get_positions.return_value = []
+        broker.get_portfolio_history.return_value = PortfolioHistory(
             timestamps=[1, 2], equity=[100000.0, 101000.0], base_value=100000.0
         )
 
-        monitor = PerformanceMonitor(client=client)
+        monitor = PerformanceMonitor(broker=broker)
         deployment = Deployment(deployment_id="dep-1")
         snapshot = monitor.snapshot(deployment)
 
@@ -434,20 +433,20 @@ class TestPerformanceMonitor:
         assert "profitability" in snapshot.disclaimer
 
     def test_snapshot_populates_fields(self):
-        client = MagicMock(spec=AstraAlpacaClient)
-        client.get_account.return_value = AlpacaAccount(
+        broker = MagicMock(spec=Broker)
+        broker.get_account.return_value = AlpacaAccount(
             equity=105000.0, cash=50000.0, portfolio_value=105000.0
         )
-        client.get_positions.return_value = [
-            AlpacaPosition(symbol="SPY", qty=100, unrealized_pl=500.0)
+        broker.get_positions.return_value = [
+            Position(symbol="SPY", qty=100, unrealized_pl=500.0)
         ]
-        client.get_portfolio_history.return_value = PortfolioHistory(
+        broker.get_portfolio_history.return_value = PortfolioHistory(
             timestamps=[1, 2, 3],
             equity=[100000.0, 102000.0, 105000.0],
             base_value=100000.0,
         )
 
-        monitor = PerformanceMonitor(client=client)
+        monitor = PerformanceMonitor(broker=broker)
         deployment = Deployment(deployment_id="dep-1")
         snapshot = monitor.snapshot(deployment)
 
@@ -513,12 +512,12 @@ class TestPerformanceMonitor:
         assert report.category == "ELEVATED"
 
     def test_snapshot_with_empty_equity_curve(self):
-        client = MagicMock(spec=AstraAlpacaClient)
-        client.get_account.return_value = AlpacaAccount(equity=100000.0, cash=100000.0)
-        client.get_positions.return_value = []
-        client.get_portfolio_history.return_value = PortfolioHistory()
+        broker = MagicMock(spec=Broker)
+        broker.get_account.return_value = AlpacaAccount(equity=100000.0, cash=100000.0)
+        broker.get_positions.return_value = []
+        broker.get_portfolio_history.return_value = PortfolioHistory()
 
-        monitor = PerformanceMonitor(client=client)
+        monitor = PerformanceMonitor(broker=broker)
         deployment = Deployment(deployment_id="dep-1")
         snapshot = monitor.snapshot(deployment)
 
@@ -535,11 +534,11 @@ class TestPerformanceMonitor:
 
 class TestShortSellingBlock:
     def test_short_sell_without_position_raises(self):
-        client = MagicMock(spec=AstraAlpacaClient)
-        client.get_positions.return_value = []
+        broker = MagicMock(spec=Broker)
+        broker.get_positions.return_value = []
 
         bus = PipelineEventBus()
-        deployer = StrategyDeployer(client=client, event_bus=bus)
+        deployer = StrategyDeployer(broker=broker, event_bus=bus)
 
         deployment = Deployment(
             deployment_id="dep-6",
@@ -554,7 +553,7 @@ class TestShortSellingBlock:
         )
         mock_strategy.return_value = mock_instance
 
-        client.submit_order.side_effect = ShortSellingBlockedError("SPY")
+        broker.submit_order.side_effect = ShortSellingBlockedError("SPY")
 
         with patch.object(deployer, "_import_strategy", return_value=mock_strategy):
             with patch.object(deployer, "_fetch_bars", return_value={
@@ -586,11 +585,11 @@ class TestCycleResultRecording:
         assert result.orders[0].id == "o1"
 
     def test_deployment_cycle_increments(self):
-        client = MagicMock(spec=AstraAlpacaClient)
+        broker = MagicMock(spec=Broker)
         bus = PipelineEventBus()
-        deployer = StrategyDeployer(client=client, event_bus=bus)
+        deployer = StrategyDeployer(broker=broker, event_bus=bus)
 
-        client.get_positions.return_value = []
+        broker.get_positions.return_value = []
 
         deployment = Deployment(deployment_id="dep-7")
         mock_strategy = MagicMock()

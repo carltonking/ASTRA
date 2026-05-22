@@ -11,6 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 def test_all_submodules_importable():
     """All 8 astra submodules must be importable with their public exports."""
     import astra
+    import astra.llm
     import astra.planner
     import astra.builder
     import astra.pipeline
@@ -38,6 +39,8 @@ def test_env_example_has_required_vars():
 
     required = [
         "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "ASTRA_LLM_PROVIDER",
         "APCA_API_KEY_ID",
         "APCA_API_SECRET_KEY",
         "APCA_PAPER_URL",
@@ -70,7 +73,7 @@ def test_pyproject_toml_version():
 
     assert data["project"]["name"] == "astra-trading-agent"
     assert data["project"]["version"] == "0.2.0"
-    assert data["project"]["requires-python"] == ">=3.11"
+    assert data["project"]["requires-python"] == ">=3.11, <3.14"
 
 
 def test_dependencies_in_pyproject():
@@ -83,7 +86,6 @@ def test_dependencies_in_pyproject():
     dep_names = [d.split(">")[0].split("=")[0].split("@")[0].strip() for d in deps]
 
     required = [
-        "aurora-trading-research",
         "anthropic",
         "fastapi",
         "uvicorn",
@@ -94,6 +96,7 @@ def test_dependencies_in_pyproject():
         "yfinance",
         "pandas",
         "numpy",
+        "reportlab",
     ]
 
     for r in required:

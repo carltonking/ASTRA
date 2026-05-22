@@ -2,7 +2,11 @@
 
 import hashlib
 import os
+import re
 import shutil
+import subprocess
+import sys
+import tempfile
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -14,6 +18,30 @@ from astra.graduation import GraduationCertificate
 from astra.pipeline.runner import PipelineResult
 from astra.alpaca.monitor import PerformanceSnapshot
 from astra.export.validator import ExportValidator, ExportValidationError
+
+
+_INLINED_BASE_STRATEGY = '''
+from abc import ABC, abstractmethod
+
+import pandas as pd
+
+
+class BaseStrategy(ABC):
+    STRATEGY_TYPE: str = ""
+    STRATEGY_HYPOTHESIS: str = ""
+
+    @abstractmethod
+    def generate_signals(self, data: pd.DataFrame) -> pd.Series:
+        ...
+
+    @abstractmethod
+    def get_parameters(self) -> dict:
+        ...
+
+    @abstractmethod
+    def get_parameter_bounds(self) -> dict:
+        ...
+'''
 
 
 _DISCLAIMER = (
@@ -105,7 +133,7 @@ class StrategyPackager:
         export_path = os.path.join(self._export_dir, filename)
 
         with open(build_result.strategy_file) as f:
-            original_code = f.read()
+            original_code = self._sanitize_strategy_code(f.read())
 
         risk_lines = []
         if spec.stop_loss is not None:
@@ -198,6 +226,40 @@ class StrategyPackager:
         ]
         metadata_block = "\n".join(metadata_dict_lines)
 
+        param_names = list(build_result.initial_parameters.keys())
+        param_dict_items = ", ".join(f"\"{k.upper()}\": {k.upper()}" for k in param_names)
+
+        demo_harness = f'''
+# ============================================================
+# Demo Harness — run this file directly to see the strategy in action
+# ============================================================
+if __name__ == "__main__":
+    import pandas as pd
+    import numpy as np
+    from datetime import datetime, timedelta
+
+    print("ASTRA Generated Strategy — Demo Mode")
+    print("=" * 50)
+
+    dates = pd.bdate_range(end=datetime.today(), periods=504)
+    close = np.random.randn(504).cumsum() + 100
+    data = pd.DataFrame({{"close": close}}, index=dates)
+
+    strategy_cls = {build_result.strategy_class_name}
+    kwargs = {{{param_dict_items}}}
+    strategy = strategy_cls(**kwargs)
+
+    signals = strategy.generate_signals(data)
+    print(f"Generated {{len(signals)}} signal periods")
+    print(f"Long signals: {{(signals == 1).sum()}}")
+    print(f"Flat periods: {{(signals == 0).sum()}}")
+    print(f"Strategy type: {{strategy_cls.STRATEGY_TYPE}}")
+    print(f"Hypothesis: {{strategy_cls.STRATEGY_HYPOTHESIS}}")
+    print()
+    print("WARNING: This uses random data for demonstration only.")
+    print("Run with real market data for meaningful analysis.")
+'''
+
         exported_lines = [
             f'"""',
             docstring,
@@ -215,9 +277,13 @@ class StrategyPackager:
             "",
             original_code,
             "",
+            demo_harness,
         ]
 
         exported_content = "\n".join(exported_lines)
+
+        formatted = self._try_format(exported_content)
+        exported_content = formatted if formatted is not None else exported_content
 
         with open(export_path, "w") as f:
             f.write(exported_content)
@@ -227,6 +293,10 @@ class StrategyPackager:
             raise ExportValidationError(
                 f"Export validation failed: {'; '.join(validation.failures)}"
             )
+
+        import_error = self._try_import_test(export_path)
+        if import_error:
+            validation.warnings.append(f"Import test warning: {import_error}")
 
         checksum = hashlib.sha256(exported_content.encode("utf-8")).hexdigest()
 
@@ -239,6 +309,65 @@ class StrategyPackager:
             export_dir=self._export_dir,
             checksum=checksum,
         )
+
+    @staticmethod
+    def _sanitize_strategy_code(code: str) -> str:
+        has_astra_import = "from astra.builder.templates" in code or "import astra" in code
+        if not has_astra_import:
+            return code
+
+        code = re.sub(
+            r"^from\s+astra\.builder\.templates\s+import\s+.*$",
+            "from inlined_base import BaseStrategy",
+            code,
+            flags=re.MULTILINE,
+        )
+        code = re.sub(
+            r"^import\s+astra.*$",
+            "",
+            code,
+            flags=re.MULTILINE,
+        )
+
+        inlined = _INLINED_BASE_STRATEGY.replace(
+            "from abc import ABC, abstractmethod\n\nimport pandas as pd\n\n\nclass BaseStrategy(ABC):",
+            "class BaseStrategy:",
+        )
+        inlined = inlined.replace("@abstractmethod\n    ", "")
+        code = inlined + "\n" + code
+        return code
+
+    def _try_format(self, code: str) -> str | None:
+        for tool in ("ruff", "black"):
+            try:
+                result = subprocess.run(
+                    [tool, "-", "--quiet"],
+                    input=code,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                if result.returncode == 0 and result.stdout:
+                    return result.stdout
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                continue
+        return None
+
+    def _try_import_test(self, file_path: str) -> str | None:
+        try:
+            import importlib.util
+
+            spec_name = f"_astra_export_test_{uuid.uuid4().hex[:8]}"
+            spec = importlib.util.spec_from_file_location(spec_name, file_path)
+            if spec is None or spec.loader is None:
+                return "Could not load module spec"
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules[spec_name] = mod
+            spec.loader.exec_module(mod)
+            del sys.modules[spec_name]
+            return None
+        except Exception as e:
+            return f"Module import failed: {e}"
 
     def _update_report_file(self, package: ExportPackage, report_path: str) -> ExportPackage:
         package.report_file = report_path

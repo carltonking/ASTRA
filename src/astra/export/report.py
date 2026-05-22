@@ -90,9 +90,11 @@ class ReportGenerator:
             "paper_days_deployed": snapshot.days_deployed,
             "paper_total_trades": snapshot.total_trades,
             "paper_win_rate": snapshot.win_rate,
-            "backtest_return": backtest.get("mean_sharpe", 0.0),
+            "backtest_return": cpcv.get("annualized_return", 0.0),
             "backtest_sharpe": backtest.get("mean_sharpe", 0.0),
             "backtest_max_drawdown": backtest.get("max_drawdown", 0.0),
+            "backtest_win_rate": backtest.get("win_rate", 0.0),
+            "backtest_n_trades": backtest.get("n_trades", 0),
             "degradation_category": degradation.category if degradation else "N/A",
             "degradation_score": degradation.overall_degradation_score if degradation else 0.0,
         })
@@ -250,6 +252,10 @@ class ReportGenerator:
                 bt_data = [
                     ["Metric", "Value"],
                     ["Mean Sharpe Ratio", f"{page['backtest_sharpe']:.2f}"],
+                    ["Annualized Return", f"{page['backtest_return']:.2%}"],
+                    ["Max Drawdown", f"{page['backtest_max_drawdown']:.2%}"],
+                    ["Win Rate", f"{page['backtest_win_rate']:.2%}"],
+                    ["Total Trades", str(page['backtest_n_trades'])],
                 ]
                 bt_table = Table(bt_data, colWidths=[2.5 * inch, 3 * inch])
                 bt_table.setStyle(TableStyle([
@@ -357,7 +363,7 @@ class ReportGenerator:
             elif ptype == "performance_evidence":
                 lines.append("PERFORMANCE EVIDENCE")
                 lines.append(f"  Paper: Return={page['paper_return']:.2%}, DD={page['paper_max_drawdown']:.2%}, Sharpe={page['paper_sharpe']:.2f}")
-                lines.append(f"  Backtest: Sharpe={page['backtest_sharpe']:.2f}")
+                lines.append(f"  Backtest: Return={page['backtest_return']:.2%}, Sharpe={page['backtest_sharpe']:.2f}, DD={page['backtest_max_drawdown']:.2%}")
                 lines.append(f"  Degradation: {page['degradation_category']} (score={page['degradation_score']:.2f})")
 
             elif ptype == "methodology_evidence":

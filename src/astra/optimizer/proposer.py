@@ -1,4 +1,4 @@
-"""Parameter proposer — uses Claude to propose specific parameter adjustments."""
+"""Parameter proposer — uses LLM to propose specific parameter adjustments."""
 
 import json
 import uuid
@@ -6,8 +6,7 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from typing import Any
 
-from anthropic import Anthropic
-
+from astra.llm.provider import LLMProvider
 from astra.planner.spec import StrategySpec
 from astra.builder.generator import BuildResult
 from astra.optimizer.diagnosis import Diagnosis
@@ -62,9 +61,8 @@ class ParameterProposal:
 
 
 class ParameterProposer:
-    def __init__(self, anthropic_api_key: str):
-        self._client = Anthropic(api_key=anthropic_api_key)
-        self._model = "claude-sonnet-4-20250514"
+    def __init__(self, llm_provider: LLMProvider):
+        self._llm = llm_provider
 
     def propose(
         self,
@@ -113,13 +111,11 @@ class ParameterProposer:
         )
 
         try:
-            response = self._client.messages.create(
-                model=self._model,
-                max_tokens=2048,
-                system=_SYSTEM_PROMPT,
+            text = self._llm.generate(
                 messages=[{"role": "user", "content": prompt}],
-            )
-            text = response.content[0].text.strip()
+                system_prompt=_SYSTEM_PROMPT,
+                max_tokens=2048,
+            ).strip()
 
             if text.startswith("```"):
                 text = text.strip("`").strip()

@@ -1,31 +1,107 @@
 import React, { useState, useEffect } from 'react';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import useSession from './hooks/useSession';
+import useWebSocket from './hooks/useWebSocket';
 import Chat from './components/Chat';
 import Dashboard from './components/Dashboard';
-import useSession from './hooks/useSession';
+
+function MarketHours() {
+  const [open, setOpen] = useState(null);
+  useEffect(() => {
+    const check = () => {
+      const now = new Date();
+      const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const day = et.getDay();
+      const hours = et.getHours() + et.getMinutes() / 60;
+      const isOpen = day >= 1 && day <= 5 && hours >= 9.5 && hours < 16;
+      setOpen(isOpen);
+    };
+    check();
+    const id = setInterval(check, 60000);
+    return () => clearInterval(id);
+  }, []);
+  if (open === null) return null;
+  return (
+    <span style={{
+      fontSize: '10px', padding: '2px 8px', borderRadius: '9999px',
+      color: open ? '#22c55e' : '#ef5350',
+      border: `1px solid ${open ? '#22c55e30' : '#ef535030'}`,
+      background: open ? '#22c55e10' : '#ef535010',
+      marginLeft: '8px',
+    }}>
+      {open ? 'OPEN' : 'CLOSED'}
+    </span>
+  );
+}
 
 export default function App() {
   const session = useSession();
-  const [activeTab, setActiveTab] = useState('overview');
+  const { connected } = useWebSocket(session.sessionId);
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div style={{ display: 'flex', height: '100vh', fontFamily: 'system-ui, sans-serif', margin: 0 }}>
+    <div style={{ display: 'flex', height: '100vh', background: '#0a0a0a' }}>
+      {/* Left sidebar — 400px fixed */}
       <div style={{
-        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
-        background: '#1a1a2e', color: '#e0e0e0', padding: '6px 16px',
-        fontSize: '12px', textAlign: 'center', letterSpacing: '1px',
-        borderBottom: '1px solid #333',
+        width: collapsed ? '0px' : '400px', minWidth: collapsed ? '0px' : '400px',
+        display: 'flex', flexDirection: 'column',
+        borderRight: collapsed ? 'none' : '1px solid #1e1e1e',
+        overflow: 'hidden', transition: 'width 100ms ease',
       }}>
-        RESEARCH PURPOSES ONLY — ASTRA v0.1.0 — Past performance does not predict future results
-      </div>
+        {/* 40px navbar */}
+        <div style={{
+          height: '40px', minHeight: '40px',
+          display: 'flex', alignItems: 'center', gap: '10px',
+          padding: '0 16px', borderBottom: '1px solid #1e1e1e',
+          background: '#0a0a0a',
+        }}>
+          <span style={{
+            width: '8px', height: '8px', borderRadius: '50%',
+            background: connected ? '#22c55e' : '#444',
+            flexShrink: 0, display: 'inline-block',
+          }} />
+          <span style={{ fontSize: '13px', fontWeight: 500, color: '#e8e8e8', letterSpacing: '0.3px' }}>
+            A.S.T.R.A.
+          </span>
+          <MarketHours />
+          <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#666' }}>
+            {session.sessionId ? (connected ? 'connected' : 'offline') : ''}
+          </span>
+          <button onClick={() => setCollapsed(!collapsed)}
+            style={{
+              background: 'none', border: 'none', color: '#666', cursor: 'pointer',
+              padding: '4px', fontSize: '12px', lineHeight: 1,
+            }}>
+            {collapsed ? '\u203A' : '\u2039'}
+          </button>
+        </div>
 
-      <div style={{ display: 'flex', width: '100%', height: '100vh', paddingTop: '28px' }}>
-        <div style={{ width: '40%', borderRight: '1px solid #333', display: 'flex', flexDirection: 'column', background: '#0f0f23' }}>
+        {/* Chat body */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <Chat session={session} />
         </div>
-        <div style={{ width: '60%', display: 'flex', flexDirection: 'column', background: '#16162a', overflow: 'auto' }}>
-          <Dashboard session={session} activeTab={activeTab} onTabChange={setActiveTab} />
-        </div>
       </div>
+
+      {/* Collapsed toggle tab */}
+      {collapsed && (
+        <button onClick={() => setCollapsed(false)}
+          style={{
+            width: '20px', alignSelf: 'center',
+            background: '#0a0a0a', border: '1px solid #1e1e1e', borderLeft: 'none',
+            color: '#666', cursor: 'pointer', padding: '8px 0', fontSize: '11px',
+            borderRadius: '0 4px 4px 0',
+          }}>
+          {'>'}
+        </button>
+      )}
+
+      {/* Right panel */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <Dashboard session={session} />
+      </div>
+
+      <ToastContainer position="bottom-right" theme="dark" />
     </div>
   );
 }

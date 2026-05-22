@@ -1,7 +1,13 @@
-"""AURORA bridge — interface between ASTRA and AURORA's research engine."""
+"""AURORA bridge — interface between ASTRA and AURORA's research engine.
+
+When AURORA is not installed, falls back to the built-in BacktestEngine
+for data fetching, feature engineering, signal generation, and CPCV backtesting.
+"""
 
 from dataclasses import dataclass, field
 from typing import Any
+
+import pandas as pd
 
 
 @dataclass
@@ -17,6 +23,11 @@ class CPCVResult:
     overfitting_probability: float = 0.0
     n_splits: int = 0
     path_distribution: dict[str, Any] = field(default_factory=dict)
+    sharpe_per_path: list[float] = field(default_factory=list)
+    max_drawdown: float = 0.0
+    annualized_return: float = 0.0
+    n_trades: int = 0
+    win_rate: float = 0.0
 
 
 @dataclass
@@ -26,8 +37,7 @@ class ReviewVerdict:
 
 
 class AuroraBridge:
-    """Interface to AURORA's research engine. Attempts to import AURORA
-    modules on initialization. If unavailable, methods raise RuntimeError."""
+    """Interface to AURORA's research engine. Falls back to built-in BacktestEngine."""
 
     def __init__(self, data_dir: str = ""):
         self.data_dir = data_dir
@@ -51,8 +61,13 @@ class AuroraBridge:
         except ImportError:
             pass
 
+        # Built-in engine for fallback (works without AURORA)
+        from astra.backtest.engine import BacktestEngine
+
+        self._engine = BacktestEngine()
+
     def check_available(self) -> bool:
-        return self._aurora_available
+        return self._aurora_available or self._engine.is_available()
 
     def download_data(
         self,
@@ -61,24 +76,21 @@ class AuroraBridge:
         end: str,
         source: str = "yfinance",
     ) -> str:
-        if not self._aurora_available:
-            raise RuntimeError("AURORA is not installed")
-        cache_key = f"{'_'.join(symbols)}_{start}_{end}"
-        return cache_key
+        if self._aurora_available and self._data_layer is not None:
+            cache_key = f"{'_'.join(symbols)}_{start}_{end}"
+            return cache_key
+        return self._engine.download_data(symbols, start, end, source)
 
-    def run_leakage_detection(
-        self,
-        feature_key: str = "",
-        label_key: str = "",
-    ) -> LeakageVerdict:
-        if not self._aurora_available:
-            raise RuntimeError("AURORA is not installed")
-        return LeakageVerdict(status="CLEAN", details="No leakage detected (stub)")
+    def get_cached_data(self, key: str) -> dict[str, pd.DataFrame] | None:
+        return self._engine.get_cached_data(key)
 
     def build_features(self, cache_key: str) -> str:
-        if not self._aurora_available:
-            raise RuntimeError("AURORA is not installed")
-        return f"features_{cache_key}"
+        if self._aurora_available:
+            return f"features_{cache_key}"
+        return self._engine.build_features(cache_key)
+
+    def get_cached_features(self, key: str) -> dict[str, pd.DataFrame] | None:
+        return self._engine.get_cached_features(key)
 
     def generate_signals(
         self,
@@ -86,9 +98,25 @@ class AuroraBridge:
         config_file: str = "",
         features_key: str = "",
     ) -> str:
-        if not self._aurora_available:
-            raise RuntimeError("AURORA is not installed")
-        return f"signals_{features_key}"
+        if self._aurora_available:
+            return f"signals_{features_key}"
+        return self._engine.generate_signals(
+            strategy_file=strategy_file,
+            features_key=features_key,
+        )
+
+    def get_cached_signals(self, key: str) -> dict[str, pd.Series] | None:
+        return self._engine.get_cached_signals(key)
+
+    def run_leakage_detection(
+        self,
+        feature_key: str = "",
+        label_key: str = "",
+    ) -> LeakageVerdict:
+        if self._aurora_available:
+            return LeakageVerdict(status="CLEAN", details="No leakage detected (stub)")
+        result = self._engine.run_leakage_detection(feature_key=feature_key)
+        return LeakageVerdict(status=result["status"], details=result["details"])
 
     def run_cpcv_backtest(
         self,
@@ -97,18 +125,43 @@ class AuroraBridge:
         n_test_splits: int = 2,
         purge_days: int = 21,
         embargo_days: int = 5,
+        transaction_cost: float = 0.0,
+        portfolio_weights: dict[str, float] | None = None,
     ) -> CPCVResult:
-        if not self._aurora_available:
-            raise RuntimeError("AURORA is not installed")
-        return CPCVResult(
-            mean_sharpe=0.5,
-            dsr=0.3,
-            overfitting_probability=0.4,
+        if self._aurora_available:
+            return CPCVResult(
+                mean_sharpe=0.5,
+                dsr=0.3,
+                overfitting_probability=0.4,
+                n_splits=n_splits,
+                path_distribution={"mean": 0.5, "std": 0.2},
+            )
+        result = self._engine.run_cpcv_backtest(
+            signals_key=signals_key,
             n_splits=n_splits,
-            path_distribution={"mean": 0.5, "std": 0.2},
+            n_test_splits=n_test_splits,
+            purge_days=purge_days,
+            embargo_days=embargo_days,
+            transaction_cost=transaction_cost,
+            portfolio_weights=portfolio_weights,
+        )
+        return CPCVResult(
+            mean_sharpe=result.mean_sharpe,
+            dsr=result.dsr,
+            overfitting_probability=result.overfitting_probability,
+            n_splits=result.n_splits,
+            path_distribution=result.path_distribution,
+            sharpe_per_path=result.sharpe_per_path,
+            max_drawdown=result.max_drawdown,
+            annualized_return=result.annualized_return,
+            n_trades=result.n_trades,
+            win_rate=result.win_rate,
         )
 
-    def run_review_board(self, run_dir: str = "") -> ReviewVerdict:
-        if not self._aurora_available:
-            raise RuntimeError("AURORA is not installed")
-        return ReviewVerdict(status="APPROVED", details="Review passed (stub)")
+    def run_review_board(
+        self, cpcv_result: CPCVResult | None = None, run_dir: str = ""
+    ) -> ReviewVerdict:
+        if self._aurora_available:
+            return ReviewVerdict(status="APPROVED", details="Review passed (stub)")
+        result = self._engine.run_review_board(cpcv_result=cpcv_result)
+        return ReviewVerdict(status=result["status"], details=result["details"])

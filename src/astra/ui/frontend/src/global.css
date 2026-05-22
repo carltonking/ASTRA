@@ -1,0 +1,86 @@
+:root {
+  --bg-base: #0a0a0a;
+  --bg-surface: #111;
+  --bg-elevated: #1a1a1a;
+  --bg-card: #161616;
+  --bg-input: #161616;
+  --bg-hover: #1a1a1a;
+  --bg-button: #252525;
+
+  --accent: #777;
+  --accent-hover: #2e2e2e;
+  --accent-dim: #444;
+
+  --green: #22c55e;
+  --green-bg: #1a2a1a;
+  --red: #ef5350;
+  --red-bg: #2a1a1a;
+  --yellow: #d0d030;
+  --yellow-bg: #2a2a1a;
+
+  --text-bright: #e8e8e8;
+  --text: #ccc;
+  --text-muted: #666;
+  --text-dim: #555;
+  --text-faint: #444;
+  --text-footer: #3a3a3a;
+
+  --border: #1e1e1e;
+  --border-light: #2a2a2a;
+  --border-input: #2a2a2a;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 9999px;
+
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace;
+  --font-size-2xs: 10px;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 13px;
+  --font-size-lg: 14px;
+  --font-size-xl: 20px;
+
+  --transition: 100ms ease;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0; padding: 0;
+  background: var(--bg-base);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1e1e1e; border-radius: var(--radius-full); }
+::-webkit-scrollbar-thumb:hover { background: #333; }
+
+::selection { background: #444; color: #fff; }
+
+:focus-visible { outline: 1px solid #555; outline-offset: 1px; }
+
+button { font-family: inherit; cursor: pointer; transition: background var(--transition); }
+button:active { opacity: 0.85; }
+
+input, textarea, select { font-family: inherit; outline: none; }
+input:focus, textarea:focus, select:focus { border-color: #555 !important; }
+
+a { color: #888; text-decoration: none; }
+a:hover { color: #ccc; }
+
+input::placeholder { color: #444; }

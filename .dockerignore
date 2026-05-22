@@ -1,0 +1,12 @@
+node_modules
+__pycache__
+*.pyc
+.git
+.env
+.venv
+.astra
+.astra_builds
+.astra_exports
+tests
+*.md
+.DS_Store

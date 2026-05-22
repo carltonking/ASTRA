@@ -3,10 +3,11 @@
 import json
 import uuid
 from datetime import datetime, timezone, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
+from astra.llm.provider import LLMProvider
 from astra.planner import StrategySpec, PlannerConversation, SpecValidator, ValidationResult
 
 
@@ -88,31 +89,33 @@ class TestStrategySpec:
 # ---------------------------------------------------------------------------
 
 
-def _make_mock_response(text: str):
-    """Build a mock Anthropic messages response with the given text."""
-    content_block = MagicMock()
-    content_block.text = text
-    response = MagicMock()
-    response.content = [content_block]
-    return response
+def _make_mock_provider(response_text: str) -> MagicMock:
+    """Build a mock LLMProvider that returns the given text from generate()."""
+    mock_provider = MagicMock(spec=LLMProvider)
+    mock_provider.generate.return_value = response_text
+    return mock_provider
+
+
+def _make_mock_provider_side_effect(response_texts: list[str]) -> MagicMock:
+    """Build a mock LLMProvider that returns different texts on successive calls."""
+    mock_provider = MagicMock(spec=LLMProvider)
+    mock_provider.generate.side_effect = response_texts
+    return mock_provider
 
 
 class TestPlannerConversation:
-    def test_initializes_with_api_key(self):
-        conv = PlannerConversation(anthropic_api_key="test-key-123")
+    def test_initializes_with_provider(self):
+        conv = PlannerConversation(llm_provider=MagicMock(spec=LLMProvider))
         assert conv.is_complete() is False
         assert conv.get_spec() is None
         assert conv.rejected is False
 
-    @patch("astra.planner.conversation.Anthropic")
-    def test_start_returns_claude_response(self, MockAnthropic):
-        mock_client = MagicMock()
-        MockAnthropic.return_value = mock_client
-        mock_client.messages.create.return_value = _make_mock_response(
+    def test_start_returns_llm_response(self):
+        mock_provider = _make_mock_provider(
             "Great idea! Let me ask about your timeframe. Are you thinking day trading, swing trading, or long-term position trading?"
         )
 
-        conv = PlannerConversation(anthropic_api_key="test-key")
+        conv = PlannerConversation(llm_provider=mock_provider)
         reply = conv.start("I want to trade momentum on QQQ")
 
         assert "timeframe" in reply.lower()
@@ -120,11 +123,7 @@ class TestPlannerConversation:
         assert conv.get_spec() is None
         assert len(conv.get_history()) == 2
 
-    @patch("astra.planner.conversation.Anthropic")
-    def test_detects_spec_ready_signal(self, MockAnthropic):
-        mock_client = MagicMock()
-        MockAnthropic.return_value = mock_client
-
+    def test_detects_spec_ready_signal(self):
         spec_json = json.dumps({
             "asset_class": "equity",
             "symbols": ["QQQ"],
@@ -141,39 +140,32 @@ class TestPlannerConversation:
             "backtest_start": "2015-01-01",
             "backtest_end": "2023-12-31",
         })
-        mock_client.messages.create.return_value = _make_mock_response(
+        mock_provider = _make_mock_provider(
             f"I have enough information. Here is the complete spec.\n\nSPEC_READY:\n{spec_json}"
         )
 
-        conv = PlannerConversation(anthropic_api_key="test-key")
-        reply = conv.start("I want to trade momentum on QQQ")
+        conv = PlannerConversation(llm_provider=mock_provider)
+        conv.start("I want to trade momentum on QQQ")
 
         assert conv.is_complete() is True
         assert conv.get_spec() is not None
         assert conv.get_spec().strategy_type == "momentum"
         assert conv.get_spec().symbols == ["QQQ"]
 
-    @patch("astra.planner.conversation.Anthropic")
-    def test_detects_spec_rejected_signal(self, MockAnthropic):
-        mock_client = MagicMock()
-        MockAnthropic.return_value = mock_client
-        mock_client.messages.create.return_value = _make_mock_response(
+    def test_detects_spec_rejected_signal(self):
+        mock_provider = _make_mock_provider(
             "SPEC_REJECTED: Your idea relies on interpreting real-time news headlines, which is not suitable for systematic backtesting as it cannot be expressed as deterministic rules."
         )
 
-        conv = PlannerConversation(anthropic_api_key="test-key")
-        reply = conv.start("Buy when the news is good and sell when it's bad")
+        conv = PlannerConversation(llm_provider=mock_provider)
+        conv.start("Buy when the news is good and sell when it's bad")
 
         assert conv.is_complete() is True
         assert conv.get_spec() is None
         assert conv.rejected is True
         assert "not suitable" in conv.rejection_reason
 
-    @patch("astra.planner.conversation.Anthropic")
-    def test_detects_spec_ready_with_code_block(self, MockAnthropic):
-        mock_client = MagicMock()
-        MockAnthropic.return_value = mock_client
-
+    def test_detects_spec_ready_with_code_block(self):
         spec_json = json.dumps({
             "asset_class": "crypto",
             "symbols": ["BTC/USD"],
@@ -190,29 +182,25 @@ class TestPlannerConversation:
             "backtest_start": "2020-01-01",
             "backtest_end": "2023-12-31",
         })
-        mock_client.messages.create.return_value = _make_mock_response(
+        mock_provider = _make_mock_provider(
             f"Here you go:\n\nSPEC_READY:\n```json\n{spec_json}\n```"
         )
 
-        conv = PlannerConversation(anthropic_api_key="test-key")
-        reply = conv.start("Trade bitcoin trends")
+        conv = PlannerConversation(llm_provider=mock_provider)
+        conv.start("Trade bitcoin trends")
 
         assert conv.is_complete() is True
         assert conv.get_spec() is not None
         assert conv.get_spec().strategy_type == "trend_following"
         assert conv.get_spec().symbols == ["BTC/USD"]
 
-    @patch("astra.planner.conversation.Anthropic")
-    def test_reply_maintains_history(self, MockAnthropic):
-        mock_client = MagicMock()
-        MockAnthropic.return_value = mock_client
+    def test_reply_maintains_history(self):
+        mock_provider = _make_mock_provider_side_effect([
+            "What timeframe are you thinking?",
+            "Great, daily is good. What is your core hypothesis?",
+        ])
 
-        mock_client.messages.create.side_effect = [
-            _make_mock_response("What timeframe are you thinking?"),
-            _make_mock_response("Great, daily is good. What is your core hypothesis?"),
-        ]
-
-        conv = PlannerConversation(anthropic_api_key="test-key")
+        conv = PlannerConversation(llm_provider=mock_provider)
         conv.start("Momentum on SPY")
         conv.reply("Daily timeframe")
 
@@ -223,11 +211,7 @@ class TestPlannerConversation:
         assert history[2]["role"] == "user"
         assert history[3]["role"] == "assistant"
 
-    @patch("astra.planner.conversation.Anthropic")
-    def test_save_session_writes_json(self, MockAnthropic, tmp_path):
-        mock_client = MagicMock()
-        MockAnthropic.return_value = mock_client
-
+    def test_save_session_writes_json(self, tmp_path):
         spec_json = json.dumps({
             "asset_class": "equity",
             "symbols": ["SPY"],
@@ -244,11 +228,11 @@ class TestPlannerConversation:
             "backtest_start": "2018-01-01",
             "backtest_end": "2023-12-31",
         })
-        mock_client.messages.create.return_value = _make_mock_response(
+        mock_provider = _make_mock_provider(
             f"SPEC_READY:\n{spec_json}"
         )
 
-        conv = PlannerConversation(anthropic_api_key="test-key")
+        conv = PlannerConversation(llm_provider=mock_provider)
         conv.start("Trend following on SPY")
 
         session_path = tmp_path / "session.json"

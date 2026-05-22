@@ -1,155 +1,204 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 
-const GATE_NAMES = [
-  'dsr', 'annual_return', 'max_drawdown',
-  'min_trades', 'max_degradation', 'min_calendar_days',
+const LIMITATIONS = [
+  "Past performance does not guarantee future results",
+  "This strategy was validated only in specific market conditions",
+  "Paper trading does not account for slippage, fees, or liquidity constraints",
+  "Live trading may produce substantially different results",
+  "This certificate does not constitute financial advice",
 ];
 
-const GATE_LABELS = {
-  dsr: 'Deflated Sharpe Ratio',
-  annual_return: 'Annual Return',
-  max_drawdown: 'Max Drawdown',
-  min_trades: 'Min Trades',
-  max_degradation: 'Degradation Score',
-  min_calendar_days: 'Days Deployed',
-};
+const EXPORT_STEPS = [
+  { id: 'validate', label: 'Validating exported strategy...' },
+  { id: 'package', label: 'Packaging strategy file...' },
+  { id: 'report', label: 'Generating PDF report...' },
+  { id: 'checksum', label: 'Calculating checksum...' },
+  { id: 'done', label: 'Export complete!' },
+];
+
+function SectionTitle({ label, badge }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+      <span style={{ fontSize: '20px', fontWeight: 600, color: '#e8e8e8' }}>{label}</span>
+      {badge && (
+        <span style={{ padding: '2px 12px', borderRadius: '9999px', fontSize: '11px', border: '1px solid #333', color: '#aaa', background: 'transparent' }}>
+          {badge}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function Card({ title, children }) {
+  return (
+    <div style={{ background: '#161616', border: '1px solid #1e1e1e', borderRadius: '8px', padding: '20px', marginBottom: '20px' }}>
+      {title && <div style={{ fontSize: '13px', fontWeight: 500, color: '#e8e8e8', marginBottom: '16px' }}>{title}</div>}
+      {children}
+    </div>
+  );
+}
 
 export default function Graduation({ session }) {
-  const [gradData, setGradData] = useState(null);
-  const [exportResult, setExportResult] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(null);
+  const [graduationData, setGraduationData] = useState(null);
 
   useEffect(() => {
-    if (!session.sessionId) return;
-    axios.get(`http://localhost:8000/api/session/${session.sessionId}/graduation`)
-      .then(res => setGradData(res.data))
-      .catch(() => {});
-  }, [session.sessionId]);
+    if (!session?.sessionId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/session/${session.sessionId}/graduation`);
+        const data = await res.json();
+        if (!cancelled) setGraduationData(data);
+      } catch {
+        if (!cancelled) setGraduationData(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [session?.sessionId]);
 
-  const handleExport = async () => {
-    try {
-      const res = await axios.post(`http://localhost:8000/api/session/${session.sessionId}/export`);
-      setExportResult(res.data);
-    } catch { /* ignore */ }
-  };
+  if (!graduationData) {
+    return (
+      <div style={{ textAlign: 'center', padding: '60px 20px', color: '#444', fontSize: '12px', letterSpacing: '0.3px' }}>
+        LOADING...
+      </div>
+    );
+  }
 
-  const cert = gradData?.certificate;
-  const gates = cert?.gate_results || {};
+  const gateResults = graduationData.certificate?.gate_results || {};
+  const progress = graduationData.progress || [];
+  const isGraduated = graduationData.is_graduated || false;
+
+  const gateEntries = Object.entries(gateResults).map(([name, g]) => ({
+    name, threshold: g.threshold_value ?? 0, actual: g.actual_value ?? 0,
+    passed: g.status === 'PASSED', gap: g.gap ?? 0,
+  }));
+  const graduated = isGraduated || (gateEntries.length > 0 && gateEntries.every(g => g.passed));
+  const passedCount = gateEntries.filter(g => g.passed).length;
+  const closestGate = [...gateEntries].sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap))[0];
+
+  useEffect(() => {
+    let cancelled = false;
+    if (exporting && !exportProgress) {
+      (async () => {
+        for (const step of EXPORT_STEPS) {
+          if (cancelled) break;
+          setExportProgress({ step: step.id, done: false });
+          await new Promise(r => setTimeout(r, 600));
+        }
+        const result = await session.doExport();
+        if (!cancelled) {
+          setExportProgress(prev => ({ ...prev, done: true }));
+          if (result?.strategy_url) window.open(result.strategy_url, '_blank');
+          if (result?.report_url) window.open(result.report_url, '_blank');
+        }
+        if (!cancelled) setTimeout(() => { setExporting(false); setExportProgress(null); }, 2000);
+      })();
+    }
+    return () => { cancelled = true; };
+  }, [exporting]);
+
+  if (gateEntries.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '60px 20px', color: '#444', fontSize: '12px', letterSpacing: '0.3px' }}>
+        NO GRADUATION DATA
+      </div>
+    );
+  }
 
   return (
     <div>
-      <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px', color: '#e0e0e0' }}>
-        Graduation
-        {gradData?.is_graduated && (
-          <span style={{
-            marginLeft: '12px', padding: '3px 10px', borderRadius: '12px',
-            fontSize: '12px', fontWeight: 600, background: '#1a3a1a',
-            color: '#30d030', border: '1px solid #2a5a2a',
-          }}>
-            Graduated
-          </span>
-        )}
-      </h2>
+      <SectionTitle label="Graduation" badge={`${passedCount}/${gateEntries.length}`} />
 
-      {gradData?.progress?.length > 0 && (
-        <div style={{ background: '#1a1a3e', borderRadius: '8px', padding: '16px',
-                      border: '1px solid #333', marginBottom: '16px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: '#c0c0e0' }}>
-            Progress: {gradData.progress[gradData.progress.length - 1]?.gates_passed || 0} of 6 gates passed
-          </h3>
-          {GATE_NAMES.map(name => {
-            const g = gates[name];
-            if (!g) return null;
-            const pct = g.threshold_value > 0
-              ? Math.min(100, (g.actual_value / g.threshold_value) * 100)
-              : (g.status === 'PASSED' ? 100 : 0);
+      {/* Gate progress bars */}
+      <Card title="Gates">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {gateEntries.map(gate => {
+            const fill = Math.min(100, gate.threshold > 0 ? (gate.actual / gate.threshold) * 100 : 0);
             return (
-              <div key={name} style={{ marginBottom: '10px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '12px', color: '#c0c0e0' }}>{GATE_LABELS[name] || name}</span>
+              <div key={gate.name}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '12px', color: '#e8e8e8', fontWeight: 500 }}>{gate.name}</span>
                   <span style={{
-                    fontSize: '12px',
-                    color: g.status === 'PASSED' ? '#30d030' : '#d03030',
-                    fontWeight: 600,
+                    padding: '1px 8px', borderRadius: '9999px', fontSize: '10px',
+                    border: `1px solid ${gate.passed ? '#333' : '#444'}`,
+                    color: gate.passed ? '#aaa' : '#666', background: 'transparent',
                   }}>
-                    {g.status} ({g.actual_value.toFixed(3)} / {g.threshold_value.toFixed(3)})
+                    {gate.passed ? 'PASSED' : 'FAILED'}
                   </span>
                 </div>
-                <div style={{ height: '8px', background: '#2a2a4a', borderRadius: '4px', overflow: 'hidden' }}>
+                <div style={{ fontSize: '11px', color: '#555', marginBottom: '6px' }}>
+                  {typeof gate.actual === 'number' ? gate.actual.toFixed(3) : gate.actual}
+                  {' / '}
+                  {typeof gate.threshold === 'number' ? gate.threshold.toFixed(3) : gate.threshold}
+                </div>
+                <div style={{ height: '2px', background: '#1e1e1e', borderRadius: '1px' }}>
                   <div style={{
-                    height: '100%', width: `${Math.min(100, pct)}%`,
-                    background: g.status === 'PASSED' ? '#30d030' : '#d03030',
-                    borderRadius: '4px', transition: 'width 0.5s',
+                    height: '100%', width: `${fill}%`,
+                    background: gate.passed ? '#22c55e' : '#555',
+                    borderRadius: '1px', transition: 'width 0.3s',
                   }} />
                 </div>
               </div>
             );
           })}
         </div>
-      )}
-
-      {cert && (
-        <div style={{ background: '#1a2a1a', borderRadius: '8px', padding: '16px',
-                      border: '1px solid #2a5a2a', marginBottom: '16px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: '#a0d0a0' }}>
-            Certificate Issued
-          </h3>
-          <div style={{ fontSize: '12px', color: '#80b080', marginBottom: '4px' }}>
-            ID: {cert.certificate_id?.slice(0, 8)}...
-          </div>
-          <div style={{ fontSize: '12px', color: '#80b080', marginBottom: '12px' }}>
-            Issued: {cert.issued_at}
-          </div>
-          <div style={{ fontSize: '11px', color: '#608060' }}>
-            {cert.limitations?.map((l, i) => (
-              <div key={i} style={{ marginBottom: '2px' }}>{i + 1}. {l}</div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-        <button onClick={handleExport}
-          disabled={!gradData?.is_graduated}
-          style={{
-            padding: '8px 20px', borderRadius: '8px', border: 'none',
-            background: gradData?.is_graduated ? '#2a6a2a' : '#333',
-            color: gradData?.is_graduated ? '#a0e0a0' : '#666',
-            cursor: gradData?.is_graduated ? 'pointer' : 'not-allowed',
-            fontWeight: 600, fontSize: '13px',
-          }}>
-          Export Strategy
-        </button>
-
-        {exportResult && (
-          <div style={{ fontSize: '12px', color: '#80b080', marginTop: '8px', width: '100%' }}>
-            Export complete: {exportResult.strategy_file}
+        {!graduated && closestGate && (
+          <div style={{ marginTop: '16px', padding: '8px 12px', background: '#1e1e1e', borderRadius: '4px', fontSize: '11px', color: '#888' }}>
+            Closest: {closestGate.name} (gap {closestGate.gap.toFixed(3)})
           </div>
         )}
+      </Card>
 
-        {cert && (
-          <>
-            <a href={`http://localhost:8000/api/session/${session.sessionId}/download/strategy`}
-              target="_blank" rel="noreferrer"
+      {/* Certificate */}
+      {graduated && (
+        <Card title="Certificate">
+          <div style={{ border: '1px solid #1e1e1e', padding: '20px', borderRadius: '6px', background: '#111' }}>
+            <div style={{ fontSize: '12px', color: '#e8e8e8', marginBottom: '8px', fontFamily: "'JetBrains Mono', 'Fira Code', monospace", letterSpacing: '0.5px' }}>
+              ASTRA-{session.sessionId?.slice(0, 8)}-GRAD
+            </div>
+            <div style={{ fontSize: '11px', color: '#555', marginBottom: '16px' }}>
+              Issued: {new Date().toLocaleDateString()}
+            </div>
+            <button onClick={() => { if (!exporting) setExporting(true); }} disabled={exporting}
               style={{
-                padding: '8px 20px', borderRadius: '8px', border: '1px solid #3a6ea5',
-                background: '#1a1a3e', color: '#3a6ea5', textDecoration: 'none',
-                fontWeight: 600, fontSize: '13px',
+                padding: '8px 16px', borderRadius: '6px', border: '1px solid #2e2e2e',
+                background: 'transparent', color: '#aaa', fontSize: '13px',
+                cursor: 'pointer', marginBottom: '12px',
               }}>
-              Download .py
-            </a>
-            <a href={`http://localhost:8000/api/session/${session.sessionId}/download/report`}
-              target="_blank" rel="noreferrer"
-              style={{
-                padding: '8px 20px', borderRadius: '8px', border: '1px solid #3a6ea5',
-                background: '#1a1a3e', color: '#3a6ea5', textDecoration: 'none',
-                fontWeight: 600, fontSize: '13px',
-              }}>
-              Download PDF
-            </a>
-          </>
-        )}
-      </div>
+              {exporting ? 'Packaging...' : 'Export Strategy'}
+            </button>
+            {exportProgress && (
+              <div style={{ marginBottom: '12px' }}>
+                {EXPORT_STEPS.map(step => {
+                  const done = exportProgress.done;
+                  const idx = EXPORT_STEPS.findIndex(s => s.id === exportProgress.step);
+                  const cur = EXPORT_STEPS.findIndex(s => s.id === step.id);
+                  const active = exportProgress.step === step.id;
+                  const completed = done || idx > cur;
+                  return (
+                    <div key={step.id} style={{
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      padding: '3px 0', fontSize: '11px',
+                      color: active ? '#e8e8e8' : completed ? '#666' : '#333',
+                    }}>
+                      <span style={{ fontSize: '10px' }}>{active ? '\u25B6' : completed ? '\u2713' : '\u25CB'}</span>
+                      {step.label}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div style={{ fontSize: '10px', color: '#444', lineHeight: '1.8' }}>
+              <div style={{ fontWeight: 500, color: '#666', marginBottom: '4px' }}>Limitations:</div>
+              <ul style={{ margin: 0, paddingLeft: '16px' }}>
+                {LIMITATIONS.map((lim, i) => <li key={i}>{lim}</li>)}
+              </ul>
+            </div>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

@@ -10,3 +10,28 @@ dist/
 build/
 .astra_builds/
 .astra_exports/
+
+# Python
+*.pyo
+*.whl
+.coverage
+.coverage.*
+htmlcov/
+.coverage.*
+
+# Tooling
+.python-version
+.ruff_cache/
+.mypy_cache/
+.pytype/
+
+.astra/
+src/astra/ui/frontend/src/assets/fonts/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+

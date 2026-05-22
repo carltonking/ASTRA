@@ -7,10 +7,11 @@ import os
 import uuid
 from dataclasses import asdict
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
+from astra.llm.provider import LLMProvider
 from astra.planner import StrategySpec
 from astra.builder import (
     StrategyGenerator,
@@ -337,27 +338,38 @@ class TestAuroraConfigWriter:
 # ---------------------------------------------------------------------------
 
 
+def _make_mock_provider(response_text: str) -> MagicMock:
+    """Build a mock LLMProvider that returns the given text from generate()."""
+    mock_provider = MagicMock(spec=LLMProvider)
+    mock_provider.generate.return_value = response_text
+    return mock_provider
+
+
+def _make_mock_provider_error() -> MagicMock:
+    """Build a mock LLMProvider that raises on generate()."""
+    mock_provider = MagicMock(spec=LLMProvider)
+    mock_provider.generate.side_effect = Exception("API error")
+    return mock_provider
+
+
 class TestStrategyGenerator:
-    def test_initializes_with_api_key_and_build_dir(self):
-        gen = StrategyGenerator(anthropic_api_key="test-key", build_dir="/tmp/astra")
-        assert gen._model == "claude-sonnet-4-20250514"
+    def test_initializes_with_provider_and_build_dir(self):
+        gen = StrategyGenerator(llm_provider=MagicMock(spec=LLMProvider), build_dir="/tmp/astra")
+        assert gen._build_dir == "/tmp/astra"
 
     def test_unknown_strategy_type_returns_failed_build(self, tmp_path):
-        gen = StrategyGenerator(anthropic_api_key="test", build_dir=str(tmp_path))
+        gen = StrategyGenerator(llm_provider=MagicMock(spec=LLMProvider), build_dir=str(tmp_path))
         spec = _make_valid_spec(strategy_type="unknown_strategy_type")
         result = gen.generate(spec)
         assert result.success is False
         assert "unknown" in result.error.lower()
 
-    @patch("astra.builder.generator.Anthropic")
-    def test_generate_creates_strategy_file(self, MockAnthropic, tmp_path):
-        mock_client = MagicMock()
-        MockAnthropic.return_value = mock_client
-        mock_client.messages.create.return_value = _make_mock_response(
+    def test_generate_creates_strategy_file(self, tmp_path):
+        mock_provider = _make_mock_provider(
             json.dumps({"fast_window": 20, "slow_window": 50, "signal_threshold": 0.02})
         )
 
-        gen = StrategyGenerator(anthropic_api_key="test", build_dir=str(tmp_path))
+        gen = StrategyGenerator(llm_provider=mock_provider, build_dir=str(tmp_path))
         spec = _make_valid_spec(strategy_type="trend_following")
         result = gen.generate(spec)
 
@@ -371,15 +383,12 @@ class TestStrategyGenerator:
         assert "class TrendFollowingStrategy" in code
         assert "generate_signals" in code
 
-    @patch("astra.builder.generator.Anthropic")
-    def test_full_generate_produces_yaml_config(self, MockAnthropic, tmp_path):
-        mock_client = MagicMock()
-        MockAnthropic.return_value = mock_client
-        mock_client.messages.create.return_value = _make_mock_response(
+    def test_full_generate_produces_yaml_config(self, tmp_path):
+        mock_provider = _make_mock_provider(
             json.dumps({"fast_window": 20, "slow_window": 50, "signal_threshold": 0.02})
         )
 
-        gen = StrategyGenerator(anthropic_api_key="test", build_dir=str(tmp_path))
+        gen = StrategyGenerator(llm_provider=mock_provider, build_dir=str(tmp_path))
         spec = _make_valid_spec(strategy_type="trend_following")
         result = gen.generate(spec)
 
@@ -390,30 +399,24 @@ class TestStrategyGenerator:
             content = f.read()
         assert spec.spec_id in content
 
-    @patch("astra.builder.generator.Anthropic")
-    def test_generate_sandbox_reject_triggers_fallback(self, MockAnthropic, tmp_path):
-        mock_client = MagicMock()
-        MockAnthropic.return_value = mock_client
-        mock_client.messages.create.return_value = _make_mock_response(
+    def test_generate_sandbox_reject_triggers_fallback(self, tmp_path):
+        mock_provider = _make_mock_provider(
             json.dumps({"investment_interval_days": 7, "max_positions": 52, "investment_fraction": 0.05})
         )
 
-        gen = StrategyGenerator(anthropic_api_key="test", build_dir=str(tmp_path))
+        gen = StrategyGenerator(llm_provider=mock_provider, build_dir=str(tmp_path))
         spec = _make_valid_spec(strategy_type="dca")
         result = gen.generate(spec)
 
         assert result.success is True
         assert os.path.exists(result.strategy_file)
 
-    @patch("astra.builder.generator.Anthropic")
-    def test_build_log_populated(self, MockAnthropic, tmp_path):
-        mock_client = MagicMock()
-        MockAnthropic.return_value = mock_client
-        mock_client.messages.create.return_value = _make_mock_response(
+    def test_build_log_populated(self, tmp_path):
+        mock_provider = _make_mock_provider(
             json.dumps({"fast_window": 20, "slow_window": 50, "signal_threshold": 0.02})
         )
 
-        gen = StrategyGenerator(anthropic_api_key="test", build_dir=str(tmp_path))
+        gen = StrategyGenerator(llm_provider=mock_provider, build_dir=str(tmp_path))
         spec = _make_valid_spec()
         result = gen.generate(spec)
 
@@ -421,15 +424,12 @@ class TestStrategyGenerator:
         assert any("Starting build" in m for m in result.build_log)
         assert any("Sandbox validation passed" in m for m in result.build_log)
 
-    @patch("astra.builder.generator.Anthropic")
-    def test_generated_code_imports_cleanly(self, MockAnthropic, tmp_path):
-        mock_client = MagicMock()
-        MockAnthropic.return_value = mock_client
-        mock_client.messages.create.return_value = _make_mock_response(
+    def test_generated_code_imports_cleanly(self, tmp_path):
+        mock_provider = _make_mock_provider(
             json.dumps({"fast_window": 20, "slow_window": 50, "signal_threshold": 0.02})
         )
 
-        gen = StrategyGenerator(anthropic_api_key="test", build_dir=str(tmp_path))
+        gen = StrategyGenerator(llm_provider=mock_provider, build_dir=str(tmp_path))
         spec = _make_valid_spec(strategy_type="trend_following")
         result = gen.generate(spec)
 
@@ -453,32 +453,22 @@ class TestStrategyGenerator:
         assert strategy_cls.STRATEGY_TYPE == "trend_following"
         assert strategy_cls.STRATEGY_HYPOTHESIS != ""
 
-    @patch("astra.builder.generator.Anthropic")
-    def test_parameter_inference_uses_defaults_when_claude_fails(
-        self, MockAnthropic, tmp_path
-    ):
-        mock_client = MagicMock()
-        MockAnthropic.return_value = mock_client
-        mock_client.messages.create.side_effect = Exception("API error")
+    def test_parameter_inference_uses_defaults_when_llm_fails(self, tmp_path):
+        mock_provider = _make_mock_provider_error()
 
-        gen = StrategyGenerator(anthropic_api_key="test", build_dir=str(tmp_path))
+        gen = StrategyGenerator(llm_provider=mock_provider, build_dir=str(tmp_path))
         spec = _make_valid_spec(strategy_type="trend_following")
         result = gen.generate(spec)
 
         assert result.success is True
         assert result.initial_parameters.get("fast_window") == 20
 
-    @patch("astra.builder.generator.Anthropic")
-    def test_param_inference_response_handles_code_block(
-        self, MockAnthropic, tmp_path
-    ):
-        mock_client = MagicMock()
-        MockAnthropic.return_value = mock_client
-        mock_client.messages.create.return_value = _make_mock_response(
+    def test_param_inference_response_handles_code_block(self, tmp_path):
+        mock_provider = _make_mock_provider(
             "```json\n{\"fast_window\": 25, \"slow_window\": 60, \"signal_threshold\": 0.03}\n```"
         )
 
-        gen = StrategyGenerator(anthropic_api_key="test", build_dir=str(tmp_path))
+        gen = StrategyGenerator(llm_provider=mock_provider, build_dir=str(tmp_path))
         spec = _make_valid_spec(strategy_type="trend_following")
         result = gen.generate(spec)
 
@@ -510,9 +500,4 @@ class TestBaseStrategy:
             BaseStrategy()
 
 
-def _make_mock_response(text: str):
-    content_block = MagicMock()
-    content_block.text = text
-    response = MagicMock()
-    response.content = [content_block]
-    return response
+

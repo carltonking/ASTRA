@@ -1,6 +1,5 @@
 """WebSocket manager — bridges PipelineEventBus to frontend clients."""
 
-import asyncio
 import json
 from datetime import datetime, timezone
 from typing import Any
@@ -50,7 +49,10 @@ class WebSocketManager:
         conns = self._connections.get(session_id, [])
         for ws in conns[:]:
             try:
-                asyncio.run(ws.send_text(message))
+                import asyncio
+                loop = asyncio.new_event_loop()
+                loop.run_until_complete(ws.send_text(message))
+                loop.close()
             except Exception:
                 conns.remove(ws)
 

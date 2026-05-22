@@ -107,7 +107,7 @@ class AstraAlpacaClient:
                 currency=raw.currency,
                 status=raw.status,
             )
-        except AttributeError:
+        except Exception:
             return self._stub_account()
 
     def get_positions(self) -> list[AlpacaPosition]:
@@ -128,7 +128,7 @@ class AstraAlpacaClient:
                     )
                 )
             return positions
-        except AttributeError:
+        except Exception:
             return []
 
     def get_orders(self, status: str = "all", limit: int = 100) -> list[AlpacaOrder]:

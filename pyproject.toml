@@ -6,9 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "astra-trading-agent"
 version = "0.2.0"
 description = "Autonomous Self-learning Trading and Research Agent"
-requires-python = ">=3.11"
+requires-python = ">=3.11, <3.14"
 dependencies = [
-    "aurora-trading-research @ git+https://github.com/carltonking/aurora-trading-research@v3.0.0",
     "anthropic>=0.25.0",
     "fastapi>=0.110.0",
     "uvicorn>=0.29.0",
@@ -20,10 +19,32 @@ dependencies = [
     "pandas>=2.0.0",
     "numpy>=1.26.0",
     "reportlab>=4.0.0",
+    "openai>=1.0.0",
+]
+
+[project.optional-dependencies]
+lseg = ["lseg-data>=1.0.0"]
+ibkr = ["ib_insync>=0.9.0"]
+test = [
+    "pytest>=8.0.0",
+    "hypothesis>=6.0.0",
+    "ruff>=0.5.0",
+    "pyright>=1.1.370",
+]
+[dependency-groups]
+dev = [
+    "openai>=1.0.0",
+    "pytest>=8.0.0",
+    "hypothesis>=6.0.0",
+    "ruff>=0.5.0",
+    "pyright>=1.1.370",
 ]
 
 [project.urls]
 Homepage = "https://github.com/carltonking/astra-trading-agent"
+
+[project.scripts]
+astra = "astra.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

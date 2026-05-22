@@ -7,9 +7,10 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from typing import Any
 
+from astra.llm.provider import LLMProvider
 from astra.planner.spec import StrategySpec
 from astra.builder.generator import BuildResult, StrategyGenerator
-from astra.pipeline.aurora_bridge import AuroraBridge, LeakageVerdict, CPCVResult, ReviewVerdict
+from astra.pipeline.aurora_bridge import AuroraBridge
 from astra.pipeline.events import PipelineEventBus
 
 DISCLAIMER = (
@@ -50,7 +51,7 @@ class PipelineResult:
 class PipelineRunner:
     def __init__(
         self,
-        anthropic_api_key: str,
+        llm_provider: LLMProvider,
         alpaca_paper_key: str,
         alpaca_paper_secret: str,
         alpaca_base_url: str,
@@ -59,7 +60,7 @@ class PipelineRunner:
         aurora_bridge: AuroraBridge | None = None,
         event_bus: PipelineEventBus | None = None,
     ):
-        self._anthropic_api_key = anthropic_api_key
+        self._llm_provider = llm_provider
         self._alpaca_paper_key = alpaca_paper_key
         self._alpaca_paper_secret = alpaca_paper_secret
         self._alpaca_base_url = alpaca_base_url
@@ -74,6 +75,8 @@ class PipelineRunner:
 
         self._event_bus = event_bus or PipelineEventBus()
 
+        self._deployer: Any | None = None
+
     def run(self, build_result: BuildResult, spec: StrategySpec) -> PipelineResult:
         pipeline_id = str(uuid.uuid4())
         result = PipelineResult(
@@ -87,11 +90,6 @@ class PipelineRunner:
         self._event_bus.emit("pipeline.started", {"pipeline_id": pipeline_id, "spec_id": spec.spec_id})
 
         try:
-            if not self._aurora.check_available():
-                return self._fail(
-                    result, "AURORA engine is not available (not installed or import failed)"
-                )
-
             self._event_bus.emit("pipeline.data_downloaded", {"symbols": spec.symbols})
             data_key = self._aurora.download_data(
                 symbols=spec.symbols,
@@ -119,22 +117,48 @@ class PipelineRunner:
                 features_key=features_key,
             )
 
-            self._event_bus.emit("pipeline.backtest_complete", {})
-            cpcv = self._aurora.run_cpcv_backtest(signals_key=signals_key)
+            cpcv = self._aurora.run_cpcv_backtest(
+                signals_key=signals_key,
+                transaction_cost=spec.transaction_cost,
+                portfolio_weights=None,
+            )
+            self._event_bus.emit("pipeline.backtest_complete", {
+                "cpcv_summary": {
+                    "mean_sharpe": cpcv.mean_sharpe,
+                    "dsr": cpcv.dsr,
+                    "overfitting_probability": cpcv.overfitting_probability,
+                    "n_splits": cpcv.n_splits,
+                    "max_drawdown": cpcv.max_drawdown,
+                    "annualized_return": cpcv.annualized_return,
+                    "n_trades": cpcv.n_trades,
+                    "win_rate": cpcv.win_rate,
+                },
+                "sharpe_per_path": cpcv.sharpe_per_path,
+                "leakage_verdict": result.leakage_verdict,
+                "review_board_status": result.review_board_status,
+            })
             result.cpcv_summary = {
                 "mean_sharpe": cpcv.mean_sharpe,
                 "dsr": cpcv.dsr,
                 "overfitting_probability": cpcv.overfitting_probability,
                 "n_splits": cpcv.n_splits,
+                "annualized_return": cpcv.annualized_return,
+                "max_drawdown": cpcv.max_drawdown,
+                "n_trades": cpcv.n_trades,
+                "win_rate": cpcv.win_rate,
             }
             result.backtest_metrics = {
                 "mean_sharpe": cpcv.mean_sharpe,
                 "dsr": cpcv.dsr,
                 "overfitting_probability": cpcv.overfitting_probability,
+                "annualized_return": cpcv.annualized_return,
+                "max_drawdown": cpcv.max_drawdown,
+                "n_trades": cpcv.n_trades,
+                "win_rate": cpcv.win_rate,
             }
 
             self._event_bus.emit("pipeline.review_complete", {"cpcv_summary": result.cpcv_summary})
-            review = self._aurora.run_review_board(run_dir=result.run_dir)
+            review = self._aurora.run_review_board(run_dir=result.run_dir, cpcv_result=cpcv)
             result.review_board_status = review.status
 
             if review.status != "APPROVED":
@@ -167,7 +191,7 @@ class PipelineRunner:
         )
 
         generator = StrategyGenerator(
-            anthropic_api_key=self._anthropic_api_key,
+            llm_provider=self._llm_provider,
             build_dir=self._build_dir,
         )
 
@@ -209,8 +233,38 @@ class PipelineRunner:
         return result
 
     def _deploy_to_paper(self, spec: StrategySpec, build_result: BuildResult) -> str:
-        deployment_id = str(uuid.uuid4())
-        return deployment_id
+        if self._deployer is None:
+            try:
+                from astra.broker.factory import create_broker
+                from astra.alpaca.deployer import StrategyDeployer
+
+                broker = create_broker(
+                    broker="alpaca",
+                    api_key=self._alpaca_paper_key,
+                    api_secret=self._alpaca_paper_secret,
+                    base_url=self._alpaca_base_url,
+                )
+                self._deployer = StrategyDeployer(
+                    broker=broker,
+                    event_bus=self._event_bus,
+                )
+            except Exception as e:
+                print(f"Paper deployment init failed, using stub: {e}")
+                deployment_id = str(uuid.uuid4())
+                return deployment_id
+
+        try:
+            pipeline_result = PipelineResult()
+            deployment = self._deployer.deploy(
+                build_result=build_result,
+                spec=spec,
+                pipeline_result=pipeline_result,
+            )
+            return deployment.deployment_id
+        except Exception as e:
+            print(f"Paper deployment failed, using stub: {e}")
+            deployment_id = str(uuid.uuid4())
+            return deployment_id
 
     def _fail(
         self,

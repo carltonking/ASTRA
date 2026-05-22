@@ -4,19 +4,38 @@
   "private": true,
   "proxy": "http://localhost:8000",
   "dependencies": {
+    "axios": "^1.6.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-markdown": "^10.1.0",
     "react-scripts": "5.0.1",
-    "recharts": "^2.10.0",
-    "axios": "^1.6.0",
-    "tailwindcss": "^3.4.0"
+    "react-toastify": "^11.1.0",
+    "recharts": "^2.15.4"
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build"
+    "build": "react-scripts build",
+    "test": "react-scripts test --watchAll=false"
   },
   "browserslist": {
-    "production": [">0.2%", "not dead", "not op_mini all"],
-    "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "jest": {
+    "collectCoverageFrom": [
+      "src/**/*.{js,jsx}"
+    ]
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2"
   }
 }

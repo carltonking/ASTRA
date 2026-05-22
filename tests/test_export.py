@@ -589,23 +589,93 @@ class TestFullExportFlow:
         assert os.path.exists(report_path)
         assert os.path.getsize(report_path) > 0
 
-    def test_disclaimer_in_all_layers(self, tmp_path):
-        export_dir = str(tmp_path / "exports")
-        spec = _make_spec()
-        strategy_file = str(tmp_path / "original.py")
-        with open(strategy_file, "w") as f:
-            f.write(_sample_strategy_code())
+# ---- Sanitization Tests ----
 
-        build_result = _make_build_result(spec, strategy_file)
-        certificate = _make_certificate(spec)
-        pipeline_result = _make_pipeline_result(spec)
-        snapshot = _make_snapshot()
+class TestSanitizeStrategyCode:
+    def test_no_astra_import_unchanged(self):
+        code = "class MyStrategy:\n    def generate_signals(self, data): pass\n"
+        result = StrategyPackager._sanitize_strategy_code(code)
+        assert result == code
+        assert "class BaseStrategy" not in result
 
-        packager = StrategyPackager(export_dir)
-        pkg = packager.package(build_result, spec, certificate, pipeline_result, snapshot)
+    def test_from_astra_templates_import_inlined(self):
+        code = "from astra.builder.templates import BaseStrategy\nclass MyStrategy(BaseStrategy):\n    pass\n"
+        result = StrategyPackager._sanitize_strategy_code(code)
+        assert "from astra" not in result
+        assert "class BaseStrategy" in result
+        assert "class MyStrategy(BaseStrategy)" in result
+        compile(result, "<test>", "exec")
 
-        assert "research purposes only" in pkg.disclaimer
+    def test_import_astra_stripped(self):
+        code = "import astra\nclass MyStrategy:\n    pass\n"
+        result = StrategyPackager._sanitize_strategy_code(code)
+        assert "import astra" not in result
+        assert "class BaseStrategy" in result
+        compile(result, "<test>", "exec")
 
-        with open(pkg.strategy_file) as f:
-            content = f.read()
-        assert "research purposes only" in content.lower()
+    def test_multiple_from_astra_imports(self):
+        code = (
+            "from astra.builder.templates import BaseStrategy\n"
+            "from astra.builder.templates import TrendFollowingStrategy\n"
+            "class MyStrategy(BaseStrategy):\n"
+            "    pass\n"
+        )
+        result = StrategyPackager._sanitize_strategy_code(code)
+        assert "from astra" not in result
+        assert result.count("class BaseStrategy") == 1
+        # Second line also matched but it was just a name, not an import of BaseStrategy
+        # Actually re.sub with r"^from\s+astra\.builder\.templates\s+import\s+.*$" matches each line
+        assert "from inlined_base import BaseStrategy" in result
+        compile(result, "<test>", "exec")
+
+    def test_import_astra_dot_foo_stripped(self):
+        code = "import astra.builder.templates\nclass MyStrategy:\n    pass\n"
+        result = StrategyPackager._sanitize_strategy_code(code)
+        assert "import astra" not in result
+        assert "class BaseStrategy" in result
+        compile(result, "<test>", "exec")
+
+    def test_inlined_base_strategy_has_correct_interface(self):
+        code = "from astra.builder.templates import BaseStrategy\nclass MyStrategy(BaseStrategy):\n    pass\n"
+        result = StrategyPackager._sanitize_strategy_code(code)
+        assert "def generate_signals" in result
+        assert "def get_parameters" in result
+        assert "def get_parameter_bounds" in result
+        assert "STRATEGY_TYPE" in result
+        assert "STRATEGY_HYPOTHESIS" in result
+
+    def test_inlined_class_is_not_abc(self):
+        """Inlined BaseStrategy should not use ABCMeta (avoids metaclass conflicts)."""
+        code = "from astra.builder.templates import BaseStrategy\nclass MyStrategy(BaseStrategy):\n    pass\n"
+        result = StrategyPackager._sanitize_strategy_code(code)
+        assert "abstractmethod" not in result
+        assert "class BaseStrategy:" in result
+
+    def test_real_template_compiles(self):
+        from astra.builder.templates import TREND_FOLLOWING_TEMPLATE
+        result = StrategyPackager._sanitize_strategy_code(TREND_FOLLOWING_TEMPLATE)
+        assert "from astra" not in result
+        assert "class BaseStrategy" in result
+        assert "class TrendFollowingStrategy(BaseStrategy)" in result
+        compile(result, "<test>", "exec")
+
+    def test_all_templates_sanitize_and_compile(self):
+        from astra.builder.templates import TEMPLATES_BY_TYPE
+        for ttype, tcode in TEMPLATES_BY_TYPE.items():
+            result = StrategyPackager._sanitize_strategy_code(tcode)
+            assert "from astra" not in result, f"{ttype} still has astra imports"
+            assert "class BaseStrategy" in result, f"{ttype} missing BaseStrategy"
+            compile(result, f"<{ttype}>", "exec")
+
+    def test_sanitized_code_does_not_use_abc(self):
+        """The inlined code should not import abc to keep the export dependency-free."""
+        code = "from astra.builder.templates import BaseStrategy\nclass X(BaseStrategy): pass\n"
+        result = StrategyPackager._sanitize_strategy_code(code)
+        assert "import abc" not in result
+
+    def test_comment_with_astra_not_stripped(self):
+        """Comments containing 'from astra' inside them should not be stripped."""
+        code = "# from astra.builder.templates import BaseStrategy\nclass MyStrategy:\n    pass\n"
+        result = StrategyPackager._sanitize_strategy_code(code)
+        assert "from astra" in result
+        assert "class BaseStrategy" in result

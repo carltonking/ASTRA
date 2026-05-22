@@ -565,3 +565,206 @@ class TestEdgeCases:
         gr = GateResult()
         assert gr.status == "FAILED"
         assert gr.gap == 0.0
+
+
+# ---- End-to-End Graduation Flow ----
+
+class TestGraduationEndToEnd:
+    def test_full_graduation_to_export_flow(self, tmp_path):
+        tracker = GraduationTracker(session_id="e2e-test")
+
+        snapshot = PerformanceSnapshot(
+            deployment_id=str(uuid.uuid4()),
+            total_return=0.12,
+            annualized_return=0.18,
+            sharpe_ratio=2.0,
+            max_drawdown=0.08,
+            win_rate=0.60,
+            total_trades=45,
+            days_deployed=60,
+            equity_curve=[100000.0, 105000.0, 110000.0, 112000.0],
+            degradation_report=DegradationReport(
+                return_degradation=0.01,
+                sharpe_degradation=0.05,
+                drawdown_expansion=0.01,
+                overall_degradation_score=0.12,
+                category="ACCEPTABLE",
+                triggers_optimizer=False,
+            ),
+        )
+
+        pipeline_result = PipelineResult(
+            pipeline_id=str(uuid.uuid4()),
+            spec_id=str(uuid.uuid4()),
+            cycle_number=1,
+            status="DEPLOYED_PAPER",
+            leakage_verdict="CLEAN",
+            review_board_status="APPROVED",
+            cpcv_summary={
+                "mean_sharpe": 2.0,
+                "dsr": 1.8,
+                "overfitting_probability": 0.05,
+                "n_splits": 10,
+                "annualized_return": 0.18,
+                "max_drawdown": 0.08,
+                "n_trades": 45,
+                "win_rate": 0.60,
+            },
+            backtest_metrics={
+                "mean_sharpe": 2.0,
+                "dsr": 1.8,
+                "overfitting_probability": 0.05,
+                "annualized_return": 0.18,
+                "max_drawdown": 0.08,
+            },
+        )
+
+        gates = GraduationGates()
+        gate_result = gates.check(snapshot, pipeline_result)
+        assert gate_result.overall_status == "GRADUATED"
+        assert gate_result.gates_passed == 6
+
+        tracker.record_check(1, gate_result)
+
+        cert = tracker.issue_certificate(
+            snapshot=snapshot,
+            pipeline_result=pipeline_result,
+            optimization_cycles=3,
+            gate_result=gate_result,
+        )
+        assert tracker.is_graduated()
+        assert cert.certificate_id != ""
+        assert len(cert.gate_results) == 6
+        assert cert.optimization_cycles == 3
+
+        json_str = cert.to_json()
+        restored = GraduationCertificate.from_json(json_str)
+        assert restored.certificate_id == cert.certificate_id
+        assert restored.optimization_cycles == 3
+
+        progress = tracker.progress_over_time()
+        assert len(progress) == 1
+        assert progress[0]["gates_passed"] == 6
+        assert progress[0]["overall_status"] == "GRADUATED"
+
+        store_dir = str(tmp_path / "graduation_e2e")
+        tracker.save(store_dir)
+        loaded = GraduationTracker.load("e2e-test", store_dir)
+        assert loaded.is_graduated()
+        assert loaded.get_certificate().certificate_id == cert.certificate_id
+
+    def test_graduation_with_multiple_checks_before_passing(self, tmp_path):
+        tracker = GraduationTracker(session_id="multi-check")
+
+        gates = GraduationGates()
+
+        snapshot_failing = PerformanceSnapshot(
+            deployment_id=str(uuid.uuid4()),
+            total_return=0.01,
+            annualized_return=0.02,
+            sharpe_ratio=0.5,
+            max_drawdown=0.15,
+            win_rate=0.40,
+            total_trades=5,
+            days_deployed=2,
+            equity_curve=[100000.0, 100100.0],
+            degradation_report=DegradationReport(
+                overall_degradation_score=0.5, category="ELEVATED", triggers_optimizer=False,
+            ),
+        )
+
+        pipeline_result = PipelineResult(
+            pipeline_id=str(uuid.uuid4()),
+            spec_id=str(uuid.uuid4()),
+            status="DEPLOYED_PAPER",
+            cpcv_summary={"mean_sharpe": 0.5, "dsr": 0.3, "n_splits": 6},
+            backtest_metrics={"mean_sharpe": 0.5, "dsr": 0.3},
+        )
+
+        pipeline_passing = PipelineResult(
+            pipeline_id=str(uuid.uuid4()),
+            spec_id=str(uuid.uuid4()),
+            status="DEPLOYED_PAPER",
+            cpcv_summary={"mean_sharpe": 2.0, "dsr": 1.6, "n_splits": 10},
+            backtest_metrics={"mean_sharpe": 2.0, "dsr": 1.6},
+        )
+
+        for cycle in range(1, 4):
+            result = gates.check(snapshot_failing, pipeline_result)
+            assert result.overall_status == "NOT_READY"
+            tracker.record_check(cycle, result)
+
+        snapshot_passing = PerformanceSnapshot(
+            deployment_id=str(uuid.uuid4()),
+            total_return=0.12,
+            annualized_return=0.18,
+            sharpe_ratio=2.0,
+            max_drawdown=0.08,
+            win_rate=0.60,
+            total_trades=45,
+            days_deployed=60,
+            equity_curve=[100000.0, 112000.0],
+            degradation_report=DegradationReport(
+                overall_degradation_score=0.1, category="ACCEPTABLE", triggers_optimizer=False,
+            ),
+        )
+
+        result = gates.check(snapshot_passing, pipeline_passing)
+        assert result.overall_status == "GRADUATED"
+        tracker.record_check(4, result)
+
+        cert = tracker.issue_certificate(snapshot_passing, pipeline_passing, 5)
+        assert tracker.is_graduated()
+
+        progress = tracker.progress_over_time()
+        assert len(progress) == 4
+        assert progress[0]["gates_passed"] < 6
+        assert progress[3]["gates_passed"] == 6
+
+        trend = tracker.gate_trend("dsr")
+        assert len(trend) == 4
+
+    def test_pipeline_result_summary_contains_cpcv_metrics(self):
+        pipeline_result = PipelineResult(
+            pipeline_id=str(uuid.uuid4()),
+            spec_id=str(uuid.uuid4()),
+            status="DEPLOYED_PAPER",
+            cpcv_summary={
+                "mean_sharpe": 1.8,
+                "dsr": 1.5,
+                "overfitting_probability": 0.08,
+                "n_splits": 10,
+                "annualized_return": 0.15,
+                "max_drawdown": 0.10,
+                "n_trades": 40,
+                "win_rate": 0.55,
+            },
+            backtest_metrics={
+                "mean_sharpe": 1.8,
+                "dsr": 1.5,
+                "overfitting_probability": 0.08,
+                "annualized_return": 0.15,
+                "max_drawdown": 0.10,
+                "n_trades": 40,
+                "win_rate": 0.55,
+            },
+        )
+
+        cert = GraduationCertificate.from_gate_check(
+            session_id="summary-test",
+            gate_result=GateCheckResult(
+                overall_status="GRADUATED",
+                gates={"test": GateResult(gate_name="test", status="PASSED")},
+                gates_passed=1,
+                gates_total=6,
+            ),
+            snapshot=_make_snapshot(),
+            pipeline_result=pipeline_result,
+            optimization_cycles=3,
+        )
+
+        summary = cert.pipeline_result_summary
+        assert "cpcv_summary" in summary
+        assert summary["cpcv_summary"]["mean_sharpe"] == 1.8
+        assert summary["cpcv_summary"]["annualized_return"] == 0.15
+        assert summary["cpcv_summary"]["win_rate"] == 0.55

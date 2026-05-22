@@ -1,10 +1,9 @@
-"""Conversational strategy planner — Claude API dialogue that produces a StrategySpec."""
+"""Conversational strategy planner — LLM dialogue that produces a StrategySpec."""
 
 import json
 from typing import Any
 
-from anthropic import Anthropic
-
+from astra.llm.provider import LLMProvider
 from astra.planner.spec import StrategySpec
 
 SYSTEM_PROMPT = """You are ASTRA's strategy planner. Your job is to conduct a focused, intelligent dialogue that extracts everything needed to build a rigorous, testable trading strategy from a user's idea.
@@ -36,9 +35,8 @@ SPEC_REJECTED: <reason>"""
 
 
 class PlannerConversation:
-    def __init__(self, anthropic_api_key: str):
-        self._client = Anthropic(api_key=anthropic_api_key)
-        self._model = "claude-sonnet-4-20250514"
+    def __init__(self, llm_provider: LLMProvider):
+        self._llm = llm_provider
         self._messages: list[dict[str, Any]] = []
         self.spec: StrategySpec | None = None
         self.rejected: bool = False
@@ -46,26 +44,22 @@ class PlannerConversation:
 
     def start(self, user_idea: str) -> str:
         self._messages.append({"role": "user", "content": user_idea})
-        response = self._client.messages.create(
-            model=self._model,
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
+        text = self._llm.generate(
             messages=[{"role": "user", "content": user_idea}],
+            system_prompt=SYSTEM_PROMPT,
+            max_tokens=4096,
         )
-        text = response.content[0].text
         self._messages.append({"role": "assistant", "content": text})
         self._check_signal(text)
         return text
 
     def reply(self, user_message: str) -> str:
         self._messages.append({"role": "user", "content": user_message})
-        response = self._client.messages.create(
-            model=self._model,
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
+        text = self._llm.generate(
             messages=self._messages[:],
+            system_prompt=SYSTEM_PROMPT,
+            max_tokens=4096,
         )
-        text = response.content[0].text
         self._messages.append({"role": "assistant", "content": text})
         self._check_signal(text)
         return text

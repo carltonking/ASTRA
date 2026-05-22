@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from astra.alpaca.client import AstraAlpacaClient
+from astra.broker.base import Broker
 from astra.alpaca.deployer import Deployment
 
 DISCLAIMER = (
@@ -41,13 +41,13 @@ class PerformanceSnapshot:
 
 
 class PerformanceMonitor:
-    def __init__(self, client: AstraAlpacaClient):
-        self._client = client
+    def __init__(self, broker: Broker):
+        self._broker = broker
 
     def snapshot(self, deployment: Deployment) -> PerformanceSnapshot:
-        account = self._client.get_account()
-        positions = self._client.get_positions()
-        history = self._client.get_portfolio_history(period="1M", timeframe="1D")
+        account = self._broker.get_account()
+        positions = self._broker.get_positions()
+        history = self._broker.get_portfolio_history(period="1M", timeframe="1D")
 
         total_return = 0.0
         annualized_return = 0.0

@@ -2,12 +2,10 @@
 
 import json
 import os
-import traceback
 from dataclasses import dataclass, field
 from typing import Any
 
-from anthropic import Anthropic
-
+from astra.llm.provider import LLMProvider
 from astra.planner.spec import StrategySpec
 from astra.builder.templates import (
     TEMPLATES_BY_TYPE,
@@ -49,9 +47,8 @@ Return a JSON object mapping parameter names to your inferred initial values."""
 
 
 class StrategyGenerator:
-    def __init__(self, anthropic_api_key: str, build_dir: str):
-        self._client = Anthropic(api_key=anthropic_api_key)
-        self._model = "claude-sonnet-4-20250514"
+    def __init__(self, llm_provider: LLMProvider, build_dir: str):
+        self._llm = llm_provider
         self._build_dir = build_dir
         self._sandbox = BuildSandbox()
 
@@ -150,13 +147,11 @@ class StrategyGenerator:
             hypothesis=spec.market_hypothesis,
             default_params=json.dumps(defaults, indent=2),
         )
-        response = self._client.messages.create(
-            model=self._model,
-            max_tokens=1024,
-            system="You are a trading strategy parameter estimator. Return ONLY valid JSON.",
+        text = self._llm.generate(
             messages=[{"role": "user", "content": prompt}],
-        )
-        text = response.content[0].text.strip()
+            system_prompt="You are a trading strategy parameter estimator. Return ONLY valid JSON.",
+            max_tokens=1024,
+        ).strip()
 
         if text.startswith("```"):
             text = text.strip("`").strip()

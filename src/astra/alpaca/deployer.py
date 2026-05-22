@@ -1,4 +1,4 @@
-"""Strategy deployer — deploys strategies to Alpaca paper trading and manages execution."""
+"""Strategy deployer — deploys strategies to paper trading and manages execution."""
 
 import importlib.util
 import json
@@ -11,8 +11,8 @@ from typing import Any
 
 import pandas as pd
 
-from astra.alpaca.client import AstraAlpacaClient, AlpacaOrder
 from astra.alpaca.exceptions import DeploymentError, ShortSellingBlockedError
+from astra.broker.base import Broker, Order
 from astra.pipeline.events import PipelineEventBus
 from astra.pipeline.runner import PipelineResult
 from astra.builder.generator import BuildResult
@@ -43,17 +43,17 @@ class CycleResult:
     cycle_number: int = 0
     signals: dict[str, int] = field(default_factory=dict)
     actions: list[str] = field(default_factory=list)
-    orders: list[AlpacaOrder] = field(default_factory=list)
+    orders: list[Order] = field(default_factory=list)
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class StrategyDeployer:
     def __init__(
         self,
-        client: AstraAlpacaClient,
+        broker: Broker,
         event_bus: PipelineEventBus,
     ):
-        self._client = client
+        self._broker = broker
         self._event_bus = event_bus
 
     def deploy(
@@ -108,7 +108,7 @@ class StrategyDeployer:
             strategy = strategy_cls(**params)
 
             symbols = self._resolve_symbols(deployment)
-            positions = {p.symbol: p for p in self._client.get_positions()}
+            positions = {p.symbol: p for p in self._broker.get_positions()}
             bars = self._fetch_bars(symbols)
 
             for symbol in symbols:
@@ -117,7 +117,7 @@ class StrategyDeployer:
                 has_position = symbol in positions
 
                 if signal == 1 and not has_position:
-                    order = self._client.submit_order(
+                    order = self._broker.submit_order(
                         symbol=symbol,
                         qty=1.0,
                         side="buy",
@@ -137,7 +137,7 @@ class StrategyDeployer:
                     )
 
                 elif signal == 0 and has_position:
-                    order = self._client.close_position(symbol)
+                    order = self._broker.close_position(symbol)
                     result.orders.append(order)
                     result.actions.append(f"CLOSE {symbol}")
                     self._event_bus.emit(
@@ -177,10 +177,10 @@ class StrategyDeployer:
         return result
 
     def stop(self, deployment: Deployment) -> None:
-        positions = self._client.get_positions()
+        positions = self._broker.get_positions()
         for pos in positions:
             try:
-                self._client.close_position(pos.symbol)
+                self._broker.close_position(pos.symbol)
             except Exception:
                 pass
 
@@ -219,7 +219,7 @@ class StrategyDeployer:
     def _fetch_bars(self, symbols: list[str]) -> dict[str, pd.DataFrame]:
         bars: dict[str, pd.DataFrame] = {}
         for symbol in symbols:
-            df = self._client.get_bars(
+            df = self._broker.get_bars(
                 symbol=symbol,
                 timeframe="1D",
                 start="2020-01-01",

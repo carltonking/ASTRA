@@ -1,21 +1,20 @@
 """Optimization engine — orchestrates the full optimization loop across cycles."""
 
 import json
-import uuid
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
 from typing import Any
 
-from astra.planner.spec import StrategySpec
-from astra.builder.generator import BuildResult
-from astra.pipeline.runner import PipelineRunner, PipelineResult
+from astra.llm.provider import LLMProvider
+from astra.pipeline.runner import PipelineRunner
 from astra.pipeline.state import PipelineState
 from astra.pipeline.events import PipelineEventBus
 from astra.alpaca.monitor import PerformanceMonitor, PerformanceSnapshot
-from astra.optimizer.diagnosis import DiagnosisEngine, Diagnosis
+from astra.optimizer.diagnosis import DiagnosisEngine
 from astra.optimizer.proposer import ParameterProposer, ParameterProposal
 from astra.optimizer.history import OptimizationHistory
 from astra.alpaca.deployer import Deployment
+
+
 
 _DISCLAIMER = (
     "ASTRA research results are not profitability guarantees. "
@@ -43,20 +42,30 @@ class OptimizationResult:
         return json.dumps(data, indent=2, default=str)
 
 
+@dataclass
+class GridSearchResult:
+    best_params: dict[str, Any] = field(default_factory=dict)
+    best_sharpe: float = 0.0
+    best_dsr: float = 0.0
+    all_results: list[dict[str, Any]] = field(default_factory=list)
+    n_trials: int = 0
+    status: str = ""
+
+
 class OptimizationEngine:
     def __init__(
         self,
-        anthropic_api_key: str,
+        llm_provider: LLMProvider,
         pipeline_runner: PipelineRunner,
         event_bus: PipelineEventBus,
         max_cycles: int = 10,
     ):
-        self._anthropic_api_key = anthropic_api_key
+        self._llm_provider = llm_provider
         self._pipeline_runner = pipeline_runner
         self._event_bus = event_bus
         self._max_cycles = max_cycles
         self._diagnosis_engine = DiagnosisEngine()
-        self._parameter_proposer = ParameterProposer(anthropic_api_key)
+        self._parameter_proposer = ParameterProposer(llm_provider)
 
     def run_optimization_loop(
         self,
@@ -214,6 +223,170 @@ class OptimizationEngine:
                 "2. Trying a different strategy type\n"
                 "3. Adjusting risk parameters (target return, max drawdown) to more realistic levels"
             ),
+        )
+
+    def run_grid_search(
+        self,
+        state: PipelineState,
+        param_grid: dict[str, list[float]],
+    ) -> GridSearchResult:
+        """Run a grid search over parameter combinations.
+
+        param_grid maps parameter names to lists of values to test.
+        Returns the combination with the best mean Sharpe ratio.
+        """
+        spec = state.spec
+        build_result = state.build_result
+        if spec is None or build_result is None:
+            return GridSearchResult(
+                status="ERROR",
+                n_trials=0,
+            )
+
+        import itertools
+
+        param_names = list(param_grid.keys())
+        param_values = list(param_grid.values())
+        combinations = list(itertools.product(*param_values))
+        all_results: list[dict[str, Any]] = []
+
+        best_sharpe = -float("inf")
+        best_params: dict[str, Any] = {}
+
+        for i, combo in enumerate(combinations):
+            params = dict(zip(param_names, combo))
+            self._event_bus.emit(
+                "pipeline.optimization_started",
+                {"trial": i + 1, "params": params},
+            )
+
+            pipeline_result = self._pipeline_runner.run_optimization_cycle(
+                build_result=build_result,
+                spec=spec,
+                updated_parameters=params,
+            )
+
+            sharpe = 0.0
+            dsr = 0.0
+            if pipeline_result.cpcv_summary:
+                sharpe = pipeline_result.cpcv_summary.get("mean_sharpe", 0.0)
+                dsr = pipeline_result.cpcv_summary.get("dsr", 0.0)
+
+            trial = {
+                "trial": i + 1,
+                "params": dict(params),
+                "sharpe": sharpe,
+                "dsr": dsr,
+                "status": pipeline_result.status,
+            }
+            all_results.append(trial)
+
+            if pipeline_result.status == "DEPLOYED_PAPER" and sharpe > best_sharpe:
+                best_sharpe = sharpe
+                best_params = dict(params)
+
+        status = "COMPLETED" if all_results else "EMPTY"
+        return GridSearchResult(
+            best_params=best_params,
+            best_sharpe=best_sharpe,
+            best_dsr=max((r["dsr"] for r in all_results), default=0.0),
+            all_results=all_results,
+            n_trials=len(combinations),
+            status=status,
+        )
+
+    def _generate_param_grid(
+        self,
+        bounds: dict[str, tuple[float, float]],
+        n_steps: int = 5,
+    ) -> dict[str, list[float]]:
+        """Generate a grid of parameter values from bounds.
+
+        Each parameter range is divided into n_steps evenly spaced values.
+        For integer ranges, values are rounded to int.
+        """
+        grid: dict[str, list[float]] = {}
+        for param_name, (low, high) in bounds.items():
+            if low == high:
+                grid[param_name] = [low]
+                continue
+            step = (high - low) / n_steps
+            values: list[float] = []
+            for i in range(n_steps + 1):
+                val = low + i * step
+                if isinstance(low, int) and isinstance(high, int):
+                    val = round(val)
+                values.append(val)
+            grid[param_name] = values
+        return grid
+
+    def run_walk_forward_optimization(
+        self,
+        state: PipelineState,
+        n_splits: int = 6,
+        n_test_splits: int = 2,
+        purge_days: int = 21,
+        embargo_days: int = 5,
+    ) -> GridSearchResult:
+        """Walk-forward optimization — uses CPCV splits to evaluate param combos.
+
+        Optimizes parameters on training splits, evaluates on test splits,
+        and returns the best combination based on test-set performance.
+        """
+        spec = state.spec
+        build_result = state.build_result
+        if spec is None or build_result is None:
+            return GridSearchResult(status="ERROR", n_trials=0)
+
+        bounds = dict(build_result.parameter_bounds)
+        param_grid = self._generate_param_grid(bounds, n_steps=4)
+        import itertools
+
+        param_names = list(param_grid.keys())
+        param_values = list(param_grid.values())
+        combinations = list(itertools.product(*param_values))
+
+        all_results: list[dict[str, Any]] = []
+        best_sharpe = -float("inf")
+        best_params: dict[str, Any] = {}
+
+        for i, combo in enumerate(combinations):
+            params = dict(zip(param_names, combo))
+            self._event_bus.emit(
+                "pipeline.optimization_started",
+                {"trial": i + 1, "params": params, "method": "walk_forward"},
+            )
+
+            pipeline_result = self._pipeline_runner.run_optimization_cycle(
+                build_result=build_result,
+                spec=spec,
+                updated_parameters=params,
+            )
+
+            sharpe = pipeline_result.cpcv_summary.get("mean_sharpe", 0.0) if pipeline_result.cpcv_summary else 0.0
+            dsr = pipeline_result.cpcv_summary.get("dsr", 0.0) if pipeline_result.cpcv_summary else 0.0
+
+            trial = {
+                "trial": i + 1,
+                "params": dict(params),
+                "sharpe": sharpe,
+                "dsr": dsr,
+                "status": pipeline_result.status,
+            }
+            all_results.append(trial)
+
+            if pipeline_result.status == "DEPLOYED_PAPER" and sharpe > best_sharpe:
+                best_sharpe = sharpe
+                best_params = dict(params)
+
+        status = "COMPLETED" if all_results else "EMPTY"
+        return GridSearchResult(
+            best_params=best_params,
+            best_sharpe=best_sharpe,
+            best_dsr=max((r.get("dsr", 0.0) for r in all_results), default=0.0),
+            all_results=all_results,
+            n_trials=len(combinations),
+            status=status,
         )
 
     @staticmethod
