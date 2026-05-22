@@ -15,8 +15,8 @@ User Idea → Planner → Builder → Backtest → Paper Trade → Graduate → 
 ## Quick Start
 
 ```bash
-git clone <repo>
-cd astra
+git clone https://github.com/carltonking/ASTRA.git
+cd ASTRA
 uv sync --dev
 cp .env.example .env
 # Set at least ANTHROPIC_API_KEY or OPENAI_API_KEY in .env
