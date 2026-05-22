@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import Overview from './tabs/Overview';
 import Backtest from './tabs/Backtest';
 import PaperTrading from './tabs/PaperTrading';
@@ -27,16 +27,14 @@ function loadTabOrder() {
   return ALL_TABS;
 }
 
-function saveTabOrder(tabs) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(tabs.map(t => t.id)));
-}
-
 export default function Dashboard({ session }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [tabs, setTabs] = useState(() => loadTabOrder());
   const [customizing, setCustomizing] = useState(false);
 
-  useEffect(() => { saveTabOrder(tabs); }, [tabs]);
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tabs.map(t => t.id)));
+  }, [tabs]);
 
   const toggleTab = (tabId) => {
     setTabs(prev => {
@@ -72,35 +70,39 @@ export default function Dashboard({ session }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{
-        height: '40px', minHeight: '40px',
-        display: 'flex', alignItems: 'center', gap: '0',
-        padding: '0 4px',
-        borderBottom: '1px solid #1e1e1e',
-        background: '#0a0a0a',
+        height: '44px', minHeight: '44px',
+        display: 'flex', alignItems: 'center',
+        padding: '0 8px',
+        borderBottom: '1px solid var(--border)',
+        background: 'var(--bg-base)',
+        gap: '0',
       }}>
         {tabs.map((tab, idx) => {
           const active = activeTab === tab.id;
           return (
-            <div key={tab.id} style={{ display: 'flex', alignItems: 'center' }}>
+            <div key={tab.id} style={{ display: 'flex', alignItems: 'stretch', height: '100%' }}>
               <button onClick={() => setActiveTab(tab.id)}
                 style={{
-                  height: '40px', padding: '0 12px', cursor: 'pointer',
-                  fontSize: '13px', fontWeight: 500,
-                  color: active ? '#e8e8e8' : '#555',
-                  background: 'transparent', border: 'none',
-                  borderBottom: `2px solid ${active ? '#fff' : 'transparent'}`,
-                  letterSpacing: '0.2px', whiteSpace: 'nowrap',
+                  padding: '0 14px',
+                  fontSize: '12px', fontWeight: 500,
+                  color: active ? 'var(--text-primary)' : 'var(--text-muted)',
+                  letterSpacing: '0.3px',
+                  borderBottom: '2px solid ' + (active ? 'var(--accent)' : 'transparent'),
+                  background: active ? 'var(--bg-surface)' : 'transparent',
+                  transition: 'all 150ms ease',
                 }}>
                 {tab.label}
               </button>
               {customizing && (
-                <div style={{ display: 'flex', gap: '2px', marginRight: '4px' }}>
+                <div style={{ display: 'flex', gap: '1px', alignItems: 'center', marginLeft: '-2px' }}>
                   <button onClick={() => moveTab(idx, idx - 1)} disabled={idx === 0}
-                    style={{ background: 'none', border: 'none', color: idx === 0 ? '#333' : '#555', cursor: idx === 0 ? 'default' : 'pointer', fontSize: '10px', padding: '0 2px' }}>
+                    className="btn btn-ghost btn-sm"
+                    style={{ padding: '0 3px', fontSize: '9px', color: idx === 0 ? 'var(--text-faint)' : 'var(--text-muted)' }}>
                     {'<'}
                   </button>
                   <button onClick={() => moveTab(idx, idx + 1)} disabled={idx === tabs.length - 1}
-                    style={{ background: 'none', border: 'none', color: idx === tabs.length - 1 ? '#333' : '#555', cursor: idx === tabs.length - 1 ? 'default' : 'pointer', fontSize: '10px', padding: '0 2px' }}>
+                    className="btn btn-ghost btn-sm"
+                    style={{ padding: '0 3px', fontSize: '9px', color: idx === tabs.length - 1 ? 'var(--text-faint)' : 'var(--text-muted)' }}>
                     {'>'}
                   </button>
                 </div>
@@ -108,33 +110,37 @@ export default function Dashboard({ session }) {
             </div>
           );
         })}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '4px', paddingRight: '8px' }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '4px', paddingRight: '8px', alignItems: 'center' }}>
           {customizing && (
-            <div style={{ display: 'flex', gap: '4px', alignItems: 'center', fontSize: '11px' }}>
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'center', fontSize: '10px' }}>
               {ALL_TABS.filter(t => !tabs.find(v => v.id === t.id)).map(t => (
                 <button key={t.id} onClick={() => toggleTab(t.id)}
-                  style={{ background: 'none', border: '1px dashed #333', color: '#555', cursor: 'pointer', fontSize: '10px', padding: '2px 6px', borderRadius: '4px' }}>
+                  className="btn btn-secondary btn-sm"
+                  style={{ borderStyle: 'dashed', padding: '2px 8px', fontSize: '10px' }}>
                   +{t.label}
                 </button>
               ))}
               {tabs.filter(t => tabs.length > 1).map(t => (
                 <button key={`hide-${t.id}`} onClick={() => { toggleTab(t.id); if (activeTab === t.id) setActiveTab(tabs.find(v => v.id !== t.id)?.id || 'overview'); }}
-                  style={{ background: 'none', border: 'none', color: '#ef5350', cursor: 'pointer', fontSize: '10px', padding: '2px 4px' }}>
+                  style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontSize: '10px', padding: '2px 4px', opacity: 0.6 }}
+                  onMouseEnter={e => e.target.style.opacity = '1'}
+                  onMouseLeave={e => e.target.style.opacity = '0.6'}>
                   x{t.label}
                 </button>
               ))}
             </div>
           )}
           <button onClick={() => setCustomizing(!customizing)}
-            style={{ background: 'none', border: 'none', color: customizing ? '#e8e8e8' : '#555', cursor: 'pointer', fontSize: '13px', padding: '2px 6px' }}>
+            className={`btn btn-sm ${customizing ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ padding: '2px 8px', fontSize: '11px' }}>
             {customizing ? 'Done' : '\u2699'}
           </button>
         </div>
       </div>
 
       <div style={{
-        flex: 1, padding: '24px', overflow: 'auto',
-        background: '#0a0a0a', color: '#ccc', fontSize: '13px', lineHeight: 1.6,
+        flex: 1, padding: '28px 32px', overflow: 'auto',
+        background: 'var(--bg-base)',
       }}>
         {renderContent()}
       </div>

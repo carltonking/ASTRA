@@ -37,18 +37,17 @@ export default function Chat({ session }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Scrollable messages */}
       <div style={{
-        flex: 1, overflowY: 'auto', padding: '16px',
+        flex: 1, overflowY: 'auto', padding: 'var(--space-md)',
         display: 'flex', flexDirection: 'column', gap: '12px',
       }}>
         {messages.length === 0 && !loading && (
           <div style={{
             alignSelf: 'center', textAlign: 'center', marginTop: '60px',
-            color: '#555', fontSize: '12px', lineHeight: 2,
+            color: 'var(--text-dim)', fontSize: '12px', lineHeight: 2,
           }}>
             Describe a trading idea<br />
-            <span style={{ color: '#444', fontSize: '11px' }}>
+            <span style={{ color: 'var(--text-faint)', fontSize: '11px' }}>
               e.g. &ldquo;Momentum on SPY with 50-day SMA filter&rdquo;
             </span>
           </div>
@@ -60,10 +59,10 @@ export default function Chat({ session }) {
           }}>
             <div style={{
               padding: '8px 12px',
-              borderRadius: msg.role === 'user' ? '8px 8px 4px 8px' : '8px 8px 8px 4px',
-              background: msg.role === 'user' ? '#1a1a1a' : 'transparent',
-              border: msg.role === 'user' ? '1px solid #2a2a2a' : 'none',
-              fontSize: '12px', lineHeight: 1.6, color: '#e8e8e8',
+              borderRadius: msg.role === 'user' ? 'var(--radius-lg) var(--radius-lg) 4px var(--radius-lg)' : 'var(--radius-lg) var(--radius-lg) var(--radius-lg) 4px',
+              background: msg.role === 'user' ? 'var(--bg-elevated)' : 'transparent',
+              border: msg.role === 'user' ? '1px solid var(--border-light)' : 'none',
+              fontSize: '12px', lineHeight: 1.6, color: 'var(--text-primary)',
             }}>
               {msg.role === 'user' ? (
                 <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
@@ -72,7 +71,7 @@ export default function Chat({ session }) {
               )}
             </div>
             <div style={{
-              fontSize: '10px', color: '#444', marginTop: '4px',
+              fontSize: '10px', color: 'var(--text-faint)', marginTop: '4px',
               textAlign: msg.role === 'user' ? 'right' : 'left', padding: '0 4px',
             }}>
               {fmt(timesRef.current[i])}
@@ -80,26 +79,25 @@ export default function Chat({ session }) {
           </div>
         ))}
         {loading && (
-          <div style={{ alignSelf: 'flex-start', color: '#666', fontSize: '11px', fontStyle: 'italic' }}>
+          <div style={{ alignSelf: 'flex-start', color: 'var(--text-muted)', fontSize: '11px', fontStyle: 'italic' }}>
             thinking...
           </div>
         )}
         <div ref={msgsEnd} />
       </div>
 
-      {/* Chips */}
       <div style={{
         display: 'flex', flexWrap: 'wrap', gap: '6px',
-        padding: '0 16px 10px', background: '#0a0a0a',
+        padding: '0 16px 10px', background: 'var(--bg-base)',
       }}>
         {chips.map((c, i) => (
           <button key={i} onClick={() => send(c)} disabled={loading}
             onMouseEnter={() => setHoveredChip(i)}
             onMouseLeave={() => setHoveredChip(null)}
             style={{
-              background: hoveredChip === i ? '#1a1a1a' : 'transparent',
-              border: '1px solid #2a2a2a', borderRadius: '9999px',
-              padding: '4px 12px', fontSize: '11px', color: '#777',
+              background: hoveredChip === i ? 'var(--bg-hover)' : 'transparent',
+              border: '1px solid var(--border-light)', borderRadius: 'var(--radius-full)',
+              padding: '4px 12px', fontSize: '11px', color: 'var(--text-secondary)',
               cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.4 : 1,
             }}>
             {c}
@@ -107,10 +105,9 @@ export default function Chat({ session }) {
         ))}
       </div>
 
-      {/* Input + Send */}
       <div style={{
         padding: '0 16px 12px', display: 'flex', gap: '8px',
-        background: '#0a0a0a',
+        background: 'var(--bg-base)',
       }}>
         <input
           value={input}
@@ -119,15 +116,15 @@ export default function Chat({ session }) {
           placeholder={sessionId ? 'Reply to ASTRA...' : 'Describe your strategy...'}
           disabled={loading}
           style={{
-            flex: 1, padding: '9px 14px', borderRadius: '8px',
-            border: '1px solid #2a2a2a', background: '#161616',
-            color: '#e8e8e8', fontSize: '13px', outline: 'none',
+            flex: 1, padding: '9px 14px', borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border-input)', background: 'var(--bg-input)',
+            color: 'var(--text-primary)', fontSize: '13px',
           }}
         />
         <button onClick={() => send()} disabled={loading}
           style={{
-            padding: '9px 18px', borderRadius: '6px', border: 'none',
-            background: '#252525', color: '#e8e8e8', fontSize: '13px',
+            padding: '9px 18px', borderRadius: 'var(--radius-md)', border: 'none',
+            background: 'var(--bg-button)', color: 'var(--text-primary)', fontSize: '13px',
             fontWeight: 500, cursor: loading ? 'default' : 'pointer',
             opacity: loading ? 0.4 : 1,
           }}>
@@ -135,12 +132,11 @@ export default function Chat({ session }) {
         </button>
       </div>
 
-      {/* Footer */}
       <div style={{
         height: '28px', minHeight: '28px',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: '10px', color: '#3a3a3a',
-        borderTop: '1px solid #1e1e1e', background: '#0a0a0a',
+        fontSize: '10px', color: 'var(--text-faint)',
+        borderTop: '1px solid var(--border)', background: 'var(--bg-base)',
       }}>
         RESEARCH PURPOSES ONLY — Not financial advice
       </div>

@@ -3,8 +3,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 
 function Card({ title, children }) {
   return (
-    <div style={{ background: '#161616', border: '1px solid #1e1e1e', borderRadius: '8px', padding: '20px', marginBottom: '20px' }}>
-      {title && <div style={{ fontSize: '13px', fontWeight: 500, color: '#e8e8e8', marginBottom: '16px' }}>{title}</div>}
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-md)', marginBottom: 'var(--space-md)' }}>
+      {title && <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 500, color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>{title}</div>}
       {children}
     </div>
   );
@@ -14,12 +14,12 @@ function Row({ label, value, mono }) {
   return (
     <div style={{
       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      padding: '10px 0', borderBottom: '1px solid #1a1a1a', fontSize: '13px',
+      padding: '10px 0', borderBottom: '1px solid var(--border)', fontSize: 'var(--font-size-sm)',
     }}>
-      <span style={{ color: '#555', minWidth: '80px' }}>{label}</span>
+      <span style={{ color: 'var(--text-dim)', minWidth: '80px' }}>{label}</span>
       <span style={{
-        color: '#e8e8e8', fontSize: '13px', textAlign: 'right',
-        fontFamily: mono ? "'JetBrains Mono', 'Fira Code', monospace" : undefined,
+        color: 'var(--text-primary)', fontSize: 'var(--font-size-sm)', textAlign: 'right',
+        fontFamily: mono ? 'var(--font-mono)' : undefined,
       }}>
         {value}
       </span>
@@ -74,16 +74,16 @@ export default function Comparison({ session }) {
 
   return (
     <div>
-      <div style={{ fontSize: '20px', fontWeight: 600, color: '#e8e8e8', marginBottom: '24px' }}>Strategy Comparison</div>
+      <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 'var(--space-lg)' }}>Strategy Comparison</div>
 
       <Card title="Metrics Comparison">
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={chartData} barGap={4}>
-            <CartesianGrid strokeDasharray="2 2" stroke="#1e1e1e" />
-            <XAxis dataKey="metric" stroke="#444" tick={{ fontSize: 10 }} />
-            <YAxis stroke="#444" tick={{ fontSize: 10 }} />
-            <Tooltip contentStyle={{ background: '#111', border: '1px solid #1e1e1e', borderRadius: '4px', fontSize: '11px' }} />
-            <Legend wrapperStyle={{ fontSize: '11px', color: '#888' }} />
+            <CartesianGrid strokeDasharray="2 2" stroke="var(--border)" />
+            <XAxis dataKey="metric" stroke="var(--text-faint)" tick={{ fontSize: 10 }} />
+            <YAxis stroke="var(--text-faint)" tick={{ fontSize: 10 }} />
+            <Tooltip contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--font-size-2xs)' }} />
+            <Legend wrapperStyle={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-muted)' }} />
             {strategies.map((s, i) => (
               <Bar key={s.name} dataKey={s.name} fill={colors[i % colors.length]} />
             ))}
@@ -94,32 +94,32 @@ export default function Comparison({ session }) {
       <Card title="Edit Strategies">
         {strategies.map((s, idx) => (
           <div key={idx} style={{
-            display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap',
-            padding: '8px 0', borderBottom: '1px solid #1a1a1a',
+            display: 'flex', gap: 'var(--space-xs)', alignItems: 'center', flexWrap: 'wrap',
+            padding: 'var(--space-xs) 0', borderBottom: '1px solid var(--border)',
           }}>
             <input value={s.name} onChange={e => {
               const next = [...strategies];
               next[idx] = { ...next[idx], name: e.target.value };
               setStrategies(next);
             }}
-              style={{ width: '100px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #2a2a2a', background: '#161616', color: '#e8e8e8', fontSize: '12px' }} />
+              style={{ width: '100px', padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-input)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 'var(--font-size-xs)' }} />
             {['sharpe', 'dsr', 'annReturn', 'maxDD', 'winRate', 'nTrades'].map(field => (
-              <div key={field} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ fontSize: '10px', color: '#555', minWidth: '20px' }}>{field.replace(/^[a-z]/, c => c.toUpperCase())}</span>
+              <div key={field} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
+                <span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-dim)', minWidth: '20px' }}>{field.replace(/^[a-z]/, c => c.toUpperCase())}</span>
                 <input type="number" step="0.01" value={s[field]} onChange={e => updateField(idx, field, e.target.value)}
-                  style={{ width: '60px', padding: '4px 6px', borderRadius: '4px', border: '1px solid #2a2a2a', background: '#161616', color: '#e8e8e8', fontSize: '11px' }} />
+                  style={{ width: '60px', padding: '4px 6px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-input)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 'var(--font-size-2xs)' }} />
               </div>
             ))}
             {strategies.length > 2 && (
               <button onClick={() => removeStrategy(idx)}
-                style={{ background: 'none', border: 'none', color: '#ef5350', cursor: 'pointer', fontSize: '14px' }}>
+                style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontSize: '14px' }}>
                 ✕
               </button>
             )}
           </div>
         ))}
         <button onClick={addStrategy}
-          style={{ marginTop: '8px', padding: '6px 14px', borderRadius: '6px', border: '1px solid #2e2e2e', background: 'transparent', color: '#aaa', fontSize: '12px', cursor: 'pointer' }}>
+          style={{ marginTop: 'var(--space-xs)', padding: '6px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 'var(--font-size-xs)', cursor: 'pointer' }}>
           + Add Strategy
         </button>
       </Card>
@@ -133,7 +133,7 @@ export default function Comparison({ session }) {
             <Row label="Lowest Drawdown" value={strategies.reduce((best, s) => s.maxDD < (best?.maxDD || Infinity) ? s : best, strategies[0]).name} />
           </div>
         ) : (
-          <div style={{ color: '#444', fontSize: '11px', textAlign: 'center', padding: '20px' }}>Add strategies to compare</div>
+          <div style={{ color: 'var(--text-faint)', fontSize: 'var(--font-size-2xs)', textAlign: 'center', padding: 'var(--space-md)' }}>Add strategies to compare</div>
         )}
       </Card>
     </div>

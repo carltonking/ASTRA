@@ -7,16 +7,16 @@ import useAlpaca from '../../hooks/useAlpaca';
 function Section({ title, children, action, lastUpdated, onRefresh }) {
   const secs = lastUpdated ? Math.floor((Date.now() - lastUpdated.getTime()) / 1000) : null;
   return (
-    <div style={{ background: '#161616', border: '1px solid #1e1e1e', borderRadius: '8px', padding: '20px', marginBottom: '20px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 500, color: '#e8e8e8' }}>{title}</span>
-          {secs !== null && <span style={{ fontSize: '10px', color: '#444' }}>{secs}s ago</span>}
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-md)', marginBottom: 'var(--space-md)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-sm)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
+          <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 500, color: 'var(--text-primary)' }}>{title}</span>
+          {secs !== null && <span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-faint)' }}>{secs}s ago</span>}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
           {action}
           {onRefresh && (
-            <button onClick={onRefresh} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '13px', padding: '2px', lineHeight: 1 }} title="Refresh">
+            <button onClick={onRefresh} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', fontSize: 'var(--font-size-sm)', padding: '2px', lineHeight: 1 }} title="Refresh">
               &#x21bb;
             </button>
           )}
@@ -30,9 +30,9 @@ function Section({ title, children, action, lastUpdated, onRefresh }) {
 function Pill({ label, color, bg, border }) {
   return (
     <span style={{
-      padding: '2px 8px', borderRadius: '9999px', fontSize: '11px', fontWeight: 500,
-      border: `1px solid ${border || '#333'}`,
-      color: color || '#888',
+      padding: '2px 8px', borderRadius: 'var(--radius-full)', fontSize: 'var(--font-size-2xs)', fontWeight: 500,
+      border: `1px solid ${border || 'var(--border)'}`,
+      color: color || 'var(--text-muted)',
       background: bg || 'transparent',
     }}>
       {label}
@@ -42,12 +42,12 @@ function Pill({ label, color, bg, border }) {
 
 function FormattedNumber({ value, decimals = 2, prefix = '', mono = true }) {
   const n = parseFloat(value);
-  if (isNaN(n)) return <span style={{ color: '#555' }}>&mdash;</span>;
-  const color = n > 0 ? '#22c55e' : n < 0 ? '#ef5350' : '#e8e8e8';
+  if (isNaN(n)) return <span style={{ color: 'var(--text-dim)' }}>&mdash;</span>;
+  const color = n > 0 ? 'var(--green)' : n < 0 ? 'var(--red)' : 'var(--text-primary)';
   return (
     <span style={{
-      color, fontFamily: mono ? "'JetBrains Mono', 'Fira Code', monospace" : undefined,
-      fontSize: '14px', fontWeight: 500,
+      color, fontFamily: mono ? 'var(--font-mono)' : undefined,
+      fontSize: 'var(--font-size-md)', fontWeight: 500,
     }}>
       {prefix}{n.toFixed(decimals)}
     </span>
@@ -60,15 +60,15 @@ function ConfigForm({ apiKeyId, apiSecret, onSave }) {
   const [k, setK] = useState(apiKeyId);
   const [s, setS] = useState(apiSecret);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      <div style={{ fontSize: '20px', fontWeight: 600, color: '#e8e8e8', marginBottom: '4px' }}>Paper Trading</div>
-      <div style={{ fontSize: '12px', color: '#555', marginBottom: '8px' }}>Connect your Alpaca paper trading account to get started.</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xs)' }}>
+      <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 'var(--space-xs)' }}>Paper Trading</div>
+      <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', marginBottom: 'var(--space-xs)' }}>Connect your Alpaca paper trading account to get started.</div>
       <input placeholder="API Key ID" value={k} onChange={e => setK(e.target.value)}
-        style={{ padding: '9px 14px', borderRadius: '6px', border: '1px solid #2a2a2a', background: '#161616', color: '#e8e8e8', fontSize: '13px' }} />
+        style={{ padding: '9px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-input)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 'var(--font-size-sm)' }} />
       <input placeholder="Secret Key" type="password" value={s} onChange={e => setS(e.target.value)}
-        style={{ padding: '9px 14px', borderRadius: '6px', border: '1px solid #2a2a2a', background: '#161616', color: '#e8e8e8', fontSize: '13px' }} />
+        style={{ padding: '9px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-input)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 'var(--font-size-sm)' }} />
       <button onClick={() => onSave(k.trim(), s.trim())}
-        style={{ alignSelf: 'flex-start', padding: '8px 20px', borderRadius: '6px', border: '1px solid #2e2e2e', background: 'transparent', color: '#aaa', fontSize: '13px', cursor: 'pointer' }}>
+        style={{ alignSelf: 'flex-start', padding: 'var(--space-xs) var(--space-md)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)', cursor: 'pointer' }}>
         Connect
       </button>
     </div>
@@ -83,11 +83,11 @@ export default function PaperTrading({ session, isActive }) {
   if (!alpaca.configured) {
     return (
       <div style={{ padding: '40px 0' }}>
-        <div style={{ fontSize: '20px', fontWeight: 600, color: '#e8e8e8', marginBottom: '12px' }}>Paper Trading</div>
-        <div style={{ fontSize: '12px', color: '#555', marginBottom: '8px' }}>
+        <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>Paper Trading</div>
+        <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', marginBottom: 'var(--space-xs)' }}>
           Paper trading requires a broker to be configured in ASTRA's backend (.env file).
         </div>
-        <div style={{ fontSize: '12px', color: '#555' }}>
+        <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>
           Set APCA_API_KEY_ID and APCA_API_SECRET_KEY for Alpaca paper trading.
           Keys are now served from the backend — no browser exposure.
         </div>
@@ -126,37 +126,37 @@ function MonitoringStatus({ sessionId }) {
   if (!monitoring || monitoring.status === 'no_data') return null;
   return (
     <Section title="Monitoring">
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-sm)' }}>
         <div>
-          <div style={{ fontSize: '11px', color: '#555', marginBottom: '4px' }}>Status</div>
-          <span style={{ color: monitoring.status === 'PAPER_TRADING' ? '#22c55e' : '#888', fontSize: '13px', fontWeight: 500 }}>{monitoring.status}</span>
+          <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-dim)', marginBottom: 'var(--space-xs)' }}>Status</div>
+          <span style={{ color: monitoring.status === 'PAPER_TRADING' ? 'var(--green)' : 'var(--text-muted)', fontSize: 'var(--font-size-sm)', fontWeight: 500 }}>{monitoring.status}</span>
         </div>
         <div>
-          <div style={{ fontSize: '11px', color: '#555', marginBottom: '4px' }}>Cycle</div>
-          <span style={{ color: '#e8e8e8', fontSize: '13px', fontWeight: 500 }}>{monitoring.cycle_number || 0}</span>
+          <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-dim)', marginBottom: 'var(--space-xs)' }}>Cycle</div>
+          <span style={{ color: 'var(--text-primary)', fontSize: 'var(--font-size-sm)', fontWeight: 500 }}>{monitoring.cycle_number || 0}</span>
         </div>
         <div>
-          <div style={{ fontSize: '11px', color: '#555', marginBottom: '4px' }}>Deployment</div>
-          <span style={{ color: '#888', fontSize: '12px', fontFamily: 'monospace' }}>{monitoring.deployment_id ? monitoring.deployment_id.substring(0, 8) + '...' : 'N/A'}</span>
+          <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-dim)', marginBottom: 'var(--space-xs)' }}>Deployment</div>
+          <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font-mono)' }}>{monitoring.deployment_id ? monitoring.deployment_id.substring(0, 8) + '...' : 'N/A'}</span>
         </div>
       </div>
       {monitoring.cpcv_summary && (
-        <div style={{ marginTop: '12px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', padding: '12px', background: '#ffffff08', borderRadius: '6px' }}>
+        <div style={{ marginTop: 'var(--space-sm)', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-sm)', padding: 'var(--space-sm)', background: 'var(--bg-hover)', borderRadius: 'var(--radius-md)' }}>
           <div>
-            <div style={{ fontSize: '10px', color: '#555' }}>Sharpe</div>
-            <div style={{ fontSize: '13px', fontWeight: 500, color: '#e8e8e8' }}>{(monitoring.cpcv_summary.mean_sharpe || 0).toFixed(2)}</div>
+            <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-dim)' }}>Sharpe</div>
+            <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 500, color: 'var(--text-primary)' }}>{(monitoring.cpcv_summary.mean_sharpe || 0).toFixed(2)}</div>
           </div>
           <div>
-            <div style={{ fontSize: '10px', color: '#555' }}>DSR</div>
-            <div style={{ fontSize: '13px', fontWeight: 500, color: '#e8e8e8' }}>{(monitoring.cpcv_summary.dsr || 0).toFixed(2)}</div>
+            <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-dim)' }}>DSR</div>
+            <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 500, color: 'var(--text-primary)' }}>{(monitoring.cpcv_summary.dsr || 0).toFixed(2)}</div>
           </div>
           <div>
-            <div style={{ fontSize: '10px', color: '#555' }}>Ann. Return</div>
-            <div style={{ fontSize: '13px', fontWeight: 500, color: '#22c55e' }}>{(monitoring.cpcv_summary.annualized_return || 0 * 100).toFixed(1)}%</div>
+            <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-dim)' }}>Ann. Return</div>
+            <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 500, color: 'var(--green)' }}>{(monitoring.cpcv_summary.annualized_return || 0 * 100).toFixed(1)}%</div>
           </div>
           <div>
-            <div style={{ fontSize: '10px', color: '#555' }}>Win Rate</div>
-            <div style={{ fontSize: '13px', fontWeight: 500, color: '#e8e8e8' }}>{(monitoring.cpcv_summary.win_rate || 0 * 100).toFixed(1)}%</div>
+            <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-dim)' }}>Win Rate</div>
+            <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 500, color: 'var(--text-primary)' }}>{(monitoring.cpcv_summary.win_rate || 0 * 100).toFixed(1)}%</div>
           </div>
         </div>
       )}
@@ -203,18 +203,18 @@ function GraduationSection({ sessionId }) {
 
   return (
     <Section title="Graduation">
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-sm)' }}>
         <div>
-          <div style={{ fontSize: '11px', color: '#555', marginBottom: '4px' }}>Certificate</div>
-          <div style={{ fontFamily: 'monospace', fontSize: '12px', color: '#22c55e', marginBottom: '8px' }}>{certId}</div>
+          <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-dim)', marginBottom: 'var(--space-xs)' }}>Certificate</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--font-size-xs)', color: 'var(--green)', marginBottom: 'var(--space-xs)' }}>{certId}</div>
           {issuedAt && (
-            <div style={{ fontSize: '11px', color: '#888' }}>Issued: {new Date(issuedAt).toLocaleDateString()}</div>
+            <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-muted)' }}>Issued: {new Date(issuedAt).toLocaleDateString()}</div>
           )}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
           {!exporting ? (
             <button onClick={execExport}
-              style={{ padding: '8px 20px', borderRadius: '6px', border: '1px solid #22c55e40', background: '#22c55e15', color: '#22c55e', fontSize: '13px', cursor: 'pointer' }}>
+              style={{ padding: 'var(--space-xs) var(--space-md)', borderRadius: 'var(--radius-md)', border: '1px solid var(--green-subtle)', background: 'var(--green-subtle)', color: 'var(--green)', fontSize: 'var(--font-size-sm)', cursor: 'pointer' }}>
               Export Strategy
             </button>
           ) : (
@@ -223,10 +223,10 @@ function GraduationSection({ sessionId }) {
                 <div key={s} style={{
                   width: '24px', height: '24px', borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '10px', fontWeight: 500,
-                  background: i < exportStep ? '#22c55e30' : '#ffffff08',
-                  color: i < exportStep ? '#22c55e' : '#555',
-                  border: `1px solid ${i < exportStep ? '#22c55e40' : '#2a2a2a'}`,
+                  fontSize: 'var(--font-size-2xs)', fontWeight: 500,
+                  background: i < exportStep ? 'var(--green-subtle)' : 'var(--bg-hover)',
+                  color: i < exportStep ? 'var(--green)' : 'var(--text-dim)',
+                  border: `1px solid ${i < exportStep ? 'var(--green-subtle)' : 'var(--border-input)'}`,
                 }}>
                   {i + 1}
                 </div>
@@ -274,23 +274,23 @@ function PortfolioChart({ alpaca }) {
   return (
     <Section title="Portfolio" lastUpdated={alpaca.lastUpdated} onRefresh={() => load(activePeriod, PERIODS.find(p => p.label === activePeriod)?.tf || '5Min')}>
       {/* Equity value */}
-      <div style={{ marginBottom: '4px' }}>
-        <span style={{ fontFamily: "'JetBrains Mono', 'Fira Code', monospace", fontSize: '24px', fontWeight: 500, color: '#e8e8e8' }}>
+      <div style={{ marginBottom: 'var(--space-xs)' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '24px', fontWeight: 500, color: 'var(--text-primary)' }}>
           {latestEquity ? `$${parseFloat(latestEquity).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '\u2014'}
         </span>
       </div>
-      {latestTime && <div style={{ fontSize: '11px', color: '#555', marginBottom: '16px' }}>{latestTime.toLocaleString()}</div>}
+      {latestTime && <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-dim)', marginBottom: 'var(--space-sm)' }}>{latestTime.toLocaleString()}</div>}
 
       {/* Period toggle */}
-      <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', gap: 'var(--space-xs)', marginBottom: 'var(--space-sm)' }}>
         {PERIODS.map(({ label, period, tf }) => (
           <button key={label} onClick={() => switchPeriod(period, tf)}
             style={{
-              padding: '4px 14px', borderRadius: '4px', border: '1px solid',
-              borderColor: activePeriod === label ? '#333' : 'transparent',
-              background: activePeriod === label ? '#1e1e1e' : 'transparent',
-              color: activePeriod === label ? '#e8e8e8' : '#555',
-              fontSize: '12px', cursor: 'pointer', fontWeight: 500,
+              padding: '4px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid',
+              borderColor: activePeriod === label ? 'var(--border)' : 'transparent',
+              background: activePeriod === label ? 'var(--bg-hover)' : 'transparent',
+              color: activePeriod === label ? 'var(--text-primary)' : 'var(--text-dim)',
+              fontSize: 'var(--font-size-xs)', cursor: 'pointer', fontWeight: 500,
             }}>
             {label}
           </button>
@@ -304,19 +304,19 @@ function PortfolioChart({ alpaca }) {
             <AreaChart data={chartData}>
               <defs>
                 <linearGradient id="portfolioGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#ffffff" stopOpacity={0.08} />
-                  <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+                  <stop offset="0%" stopColor="var(--text-primary)" stopOpacity={0.08} />
+                  <stop offset="100%" stopColor="var(--text-primary)" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="2 2" stroke="#1e1e1e" vertical={false} />
-              <XAxis dataKey="time" stroke="#444" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={40} />
-              <YAxis stroke="#444" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} domain={['dataMin', 'dataMax']} tickFormatter={v => `$${v.toLocaleString()}`} />
-              <Tooltip contentStyle={{ background: '#111', border: '1px solid #1e1e1e', borderRadius: '4px', fontSize: '11px' }} />
-              <Area type="monotone" dataKey="equity" stroke="#ffffff" strokeWidth={1.5} fill="url(#portfolioGrad)" />
+              <CartesianGrid strokeDasharray="2 2" stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="time" stroke="var(--text-faint)" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={40} />
+              <YAxis stroke="var(--text-faint)" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} domain={['dataMin', 'dataMax']} tickFormatter={v => `$${v.toLocaleString()}`} />
+              <Tooltip contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--font-size-2xs)' }} />
+              <Area type="monotone" dataKey="equity" stroke="var(--text-primary)" strokeWidth={1.5} fill="url(#portfolioGrad)" />
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <div style={{ textAlign: 'center', padding: '60px 0', color: '#444', fontSize: '11px' }}>Loading portfolio data...</div>
+          <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-faint)', fontSize: 'var(--font-size-2xs)' }}>Loading portfolio data...</div>
         )}
       </div>
     </Section>
@@ -330,12 +330,12 @@ function Balances({ alpaca }) {
   if (!a) return null;
 
   const dailyChange = parseFloat(a.equity) - parseFloat(a.last_equity);
-  const changeColor = dailyChange > 0 ? '#22c55e' : dailyChange < 0 ? '#ef5350' : '#e8e8e8';
+  const changeColor = dailyChange > 0 ? 'var(--green)' : dailyChange < 0 ? 'var(--red)' : 'var(--text-primary)';
 
   const col = (label, value, color) => (
     <div>
-      <div style={{ fontSize: '12px', color: '#555', marginBottom: '4px' }}>{label}</div>
-      <div style={{ fontSize: '14px', fontWeight: 500, color: color || '#e8e8e8', fontFamily: "'JetBrains Mono', 'Fira Code', monospace" }}>{value}</div>
+      <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', marginBottom: 'var(--space-xs)' }}>{label}</div>
+      <div style={{ fontSize: 'var(--font-size-md)', fontWeight: 500, color: color || 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{value}</div>
     </div>
   );
 
@@ -343,11 +343,11 @@ function Balances({ alpaca }) {
     <Section title="Balances" lastUpdated={alpaca.lastUpdated} onRefresh={alpaca.fetchAccount}
       action={
         <button onClick={alpaca.fetchAccount}
-          style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid #333', background: 'transparent', color: '#555', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', lineHeight: 1 }}>
+          style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-dim)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--font-size-2xs)', lineHeight: 1 }}>
           &#x21bb;
         </button>
       }>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-sm)' }}>
         {col('Buying Power', `$${parseFloat(a.buying_power).toLocaleString(undefined, { minimumFractionDigits: 2 })}`)}
         {col('Cash', `$${parseFloat(a.cash).toLocaleString(undefined, { minimumFractionDigits: 2 })}`)}
         {col('Daily Change', `${dailyChange >= 0 ? '+' : ''}$${dailyChange.toFixed(2)}`, changeColor)}
@@ -367,7 +367,7 @@ function TopPositions({ alpaca }) {
     return filter === 'win' ? pl >= 0 : pl < 0;
   });
 
-  const headerStyle = { padding: '8px 12px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#555', fontWeight: 500, textAlign: 'right', background: '#111', borderBottom: '1px solid #1e1e1e' };
+  const headerStyle = { padding: '8px 12px', fontSize: 'var(--font-size-2xs)', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-dim)', fontWeight: 500, textAlign: 'right', background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' };
   const headerLeft = { ...headerStyle, textAlign: 'left' };
 
   return (
@@ -375,21 +375,21 @@ function TopPositions({ alpaca }) {
       action={
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <select value={filter} onChange={e => setFilter(e.target.value)}
-            style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #2a2a2a', background: '#161616', color: '#aaa', fontSize: '12px', outline: 'none' }}>
+            style={{ padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-input)', background: 'var(--bg-card)', color: 'var(--text-secondary)', fontSize: 'var(--font-size-xs)', outline: 'none' }}>
             <option value="all">All</option>
             <option value="win">Winners</option>
             <option value="loss">Losers</option>
           </select>
-          <span style={{ fontSize: '11px', color: '#555', cursor: 'pointer' }}>View All</span>
+          <span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-dim)', cursor: 'pointer' }}>View All</span>
         </div>
       }>
       {filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 0', color: '#444', fontSize: '12px', fontStyle: 'italic' }}>
+        <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-faint)', fontSize: 'var(--font-size-xs)', fontStyle: 'italic' }}>
           No open positions
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--font-size-sm)' }}>
             <thead>
               <tr>
                 <th style={headerLeft}>Asset</th>
@@ -403,12 +403,12 @@ function TopPositions({ alpaca }) {
               {filtered.map(p => {
                 const pl = parseFloat(p.unrealized_pl);
                 return (
-                  <tr key={p.asset_id || p.symbol} style={{ borderBottom: '1px solid #1a1a1a' }}>
-                    <td style={{ padding: '10px 12px', color: '#e8e8e8' }}>{p.symbol}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', color: '#e8e8e8', fontFamily: "'JetBrains Mono', 'Fira Code', monospace" }}>${parseFloat(p.current_price).toFixed(2)}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', color: '#e8e8e8', fontFamily: "'JetBrains Mono', 'Fira Code', monospace" }}>{parseFloat(p.qty).toFixed(2)}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', color: '#e8e8e8', fontFamily: "'JetBrains Mono', 'Fira Code', monospace" }}>${parseFloat(p.market_value).toFixed(2)}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: "'JetBrains Mono', 'Fira Code', monospace", color: pl >= 0 ? '#22c55e' : '#ef5350' }}>
+                  <tr key={p.asset_id || p.symbol} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-primary)' }}>{p.symbol}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>${parseFloat(p.current_price).toFixed(2)}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{parseFloat(p.qty).toFixed(2)}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>${parseFloat(p.market_value).toFixed(2)}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: pl >= 0 ? 'var(--green)' : 'var(--red)' }}>
                       {pl >= 0 ? '+' : ''}${pl.toFixed(2)}
                     </td>
                   </tr>
@@ -465,12 +465,12 @@ function RecentOrders({ alpaca }) {
 
   const statusStyle = (status) => {
     const s = status?.toLowerCase() || '';
-    if (s === 'filled') return { color: '#22c55e', border: '1px solid #22c55e30', bg: '#22c55e15' };
-    if (s === 'canceled' || s === 'cancelled') return { color: '#ef5350', border: '1px solid #ef535030', bg: '#ef535015' };
-    return { color: '#888', border: '1px solid #333', bg: '#ffffff10' };
+    if (s === 'filled') return { color: 'var(--green)', border: '1px solid var(--green-subtle)', bg: 'var(--green-subtle)' };
+    if (s === 'canceled' || s === 'cancelled') return { color: 'var(--red)', border: '1px solid var(--red-subtle)', bg: 'var(--red-subtle)' };
+    return { color: 'var(--text-muted)', border: '1px solid var(--border)', bg: 'var(--bg-hover)' };
   };
 
-  const th = { padding: '8px 10px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#555', fontWeight: 500, textAlign: 'right', background: '#111', borderBottom: '1px solid #1e1e1e' };
+  const th = { padding: '8px 10px', fontSize: 'var(--font-size-2xs)', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-dim)', fontWeight: 500, textAlign: 'right', background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' };
   const thLeft = { ...th, textAlign: 'left' };
   const thCenter = { ...th, textAlign: 'center' };
 
@@ -479,26 +479,26 @@ function RecentOrders({ alpaca }) {
       action={
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={{ position: 'relative' }}>
-            <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#555', fontSize: '11px', pointerEvents: 'none' }}>&#x1F50D;</span>
+            <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', fontSize: 'var(--font-size-2xs)', pointerEvents: 'none' }}>&#x1F50D;</span>
             <input placeholder="Search" value={search} onChange={e => setSearch(e.target.value)}
-              style={{ padding: '6px 10px 6px 28px', borderRadius: '8px', border: '1px solid #2a2a2a', background: '#161616', color: '#e8e8e8', fontSize: '12px', outline: 'none', width: '140px' }} />
+              style={{ padding: '6px 10px 6px 28px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-input)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 'var(--font-size-xs)', outline: 'none', width: '140px' }} />
           </div>
           {Object.values(selected).some(Boolean) && (
             <button onClick={cancelSelected} disabled={cancelBusy}
-              style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #2a2a2a', background: 'transparent', color: '#888', fontSize: '11px', cursor: 'pointer' }}>
+              style={{ padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-input)', background: 'transparent', color: 'var(--text-muted)', fontSize: 'var(--font-size-2xs)', cursor: 'pointer' }}>
               Cancel {Object.values(selected).filter(Boolean).length} selected
             </button>
           )}
         </div>
       }>
       {searched.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 0', color: '#444', fontSize: '12px', fontStyle: 'italic' }}>
+        <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-faint)', fontSize: 'var(--font-size-xs)', fontStyle: 'italic' }}>
           No orders found
         </div>
       ) : (
         <>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--font-size-sm)' }}>
               <thead>
                 <tr>
                   <th style={{ ...thCenter, width: '32px' }}>
@@ -519,17 +519,17 @@ function RecentOrders({ alpaca }) {
                 {pageOrders.map(o => {
                   const ss = statusStyle(o.status);
                   return (
-                    <tr key={o.id} style={{ borderBottom: '1px solid #1a1a1a' }}>
+                    <tr key={o.id} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td style={{ padding: '10px 6px', textAlign: 'center' }}>
                         <input type="checkbox" checked={!!selected[o.id]} onChange={() => toggleSelect(o.id)}
-                          style={{ accentColor: '#fff', cursor: 'pointer' }} />
+                          style={{ accentColor: 'var(--text-primary)', cursor: 'pointer' }} />
                       </td>
-                      <td style={{ padding: '10px 10px', color: '#e8e8e8' }}>{o.symbol}</td>
-                      <td style={{ padding: '10px 10px', textAlign: 'right', color: '#888' }}>{o.type}</td>
-                      <td style={{ padding: '10px 10px', textAlign: 'right', color: o.side === 'buy' ? '#22c55e' : '#ef5350' }}>{o.side}</td>
-                      <td style={{ padding: '10px 10px', textAlign: 'right', color: '#e8e8e8', fontFamily: "'JetBrains Mono', 'Fira Code', monospace" }}>{o.qty}</td>
-                      <td style={{ padding: '10px 10px', textAlign: 'right', color: '#e8e8e8', fontFamily: "'JetBrains Mono', 'Fira Code', monospace" }}>{o.filled_qty || '0'}</td>
-                      <td style={{ padding: '10px 10px', textAlign: 'right', color: '#e8e8e8', fontFamily: "'JetBrains Mono', 'Fira Code', monospace" }}>{o.filled_avg_price ? `$${parseFloat(o.filled_avg_price).toFixed(2)}` : '\u2014'}</td>
+                      <td style={{ padding: '10px 10px', color: 'var(--text-primary)' }}>{o.symbol}</td>
+                      <td style={{ padding: '10px 10px', textAlign: 'right', color: 'var(--text-muted)' }}>{o.type}</td>
+                      <td style={{ padding: '10px 10px', textAlign: 'right', color: o.side === 'buy' ? 'var(--green)' : 'var(--red)' }}>{o.side}</td>
+                      <td style={{ padding: '10px 10px', textAlign: 'right', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{o.qty}</td>
+                      <td style={{ padding: '10px 10px', textAlign: 'right', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{o.filled_qty || '0'}</td>
+                      <td style={{ padding: '10px 10px', textAlign: 'right', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{o.filled_avg_price ? `$${parseFloat(o.filled_avg_price).toFixed(2)}` : '\u2014'}</td>
                       <td style={{ padding: '10px 10px', textAlign: 'right' }}>
                         <Pill label={o.status} color={ss.color} border={ss.border} bg={ss.bg} />
                       </td>
@@ -540,23 +540,23 @@ function RecentOrders({ alpaca }) {
             </table>
           </div>
           {/* Pagination */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', marginTop: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-xs)', marginTop: 'var(--space-sm)' }}>
             <button onClick={() => setPage(Math.max(0, safePage - 1))} disabled={safePage === 0}
-              style={{ padding: '4px 10px', borderRadius: '4px', border: '1px solid #1e1e1e', background: '#161616', color: safePage === 0 ? '#333' : '#888', cursor: safePage === 0 ? 'default' : 'pointer', fontSize: '12px' }}>
+              style={{ padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-card)', color: safePage === 0 ? 'var(--text-faint)' : 'var(--text-muted)', cursor: safePage === 0 ? 'default' : 'pointer', fontSize: 'var(--font-size-xs)' }}>
               Prev
             </button>
             {Array.from({ length: totalPages }, (_, i) => (
               <button key={i} onClick={() => setPage(i)}
                 style={{
-                  padding: '4px 10px', borderRadius: '4px', border: '1px solid #1e1e1e', fontSize: '12px', cursor: 'pointer',
-                  background: i === safePage ? '#1e1e1e' : '#161616',
-                  color: i === safePage ? '#e8e8e8' : '#888',
+                  padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: 'var(--font-size-xs)', cursor: 'pointer',
+                  background: i === safePage ? 'var(--bg-hover)' : 'var(--bg-card)',
+                  color: i === safePage ? 'var(--text-primary)' : 'var(--text-muted)',
                 }}>
                 {i + 1}
               </button>
             ))}
             <button onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))} disabled={safePage === totalPages - 1}
-              style={{ padding: '4px 10px', borderRadius: '4px', border: '1px solid #1e1e1e', background: '#161616', color: safePage === totalPages - 1 ? '#333' : '#888', cursor: safePage === totalPages - 1 ? 'default' : 'pointer', fontSize: '12px' }}>
+              style={{ padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-card)', color: safePage === totalPages - 1 ? 'var(--text-faint)' : 'var(--text-muted)', cursor: safePage === totalPages - 1 ? 'default' : 'pointer', fontSize: 'var(--font-size-xs)' }}>
               Next
             </button>
           </div>

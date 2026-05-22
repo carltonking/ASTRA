@@ -2,13 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 function SectionTitle({ label }) {
-  return <div style={{ fontSize: '20px', fontWeight: 600, color: '#e8e8e8', marginBottom: '24px' }}>{label}</div>;
+  return <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 'var(--space-lg)' }}>{label}</div>;
 }
 
 function Card({ title, children }) {
   return (
-    <div style={{ background: '#161616', border: '1px solid #1e1e1e', borderRadius: '8px', padding: '20px', marginBottom: '20px' }}>
-      {title && <div style={{ fontSize: '13px', fontWeight: 500, color: '#e8e8e8', marginBottom: '16px' }}>{title}</div>}
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-md)', marginBottom: 'var(--space-md)' }}>
+      {title && <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 500, color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>{title}</div>}
       {children}
     </div>
   );
@@ -18,12 +18,12 @@ function Row({ label, value, mono }) {
   return (
     <div style={{
       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      padding: '10px 0', borderBottom: '1px solid #1a1a1a', fontSize: '13px',
+      padding: '10px 0', borderBottom: '1px solid var(--border)', fontSize: 'var(--font-size-sm)',
     }}>
-      <span style={{ color: '#555', minWidth: '80px' }}>{label}</span>
+      <span style={{ color: 'var(--text-dim)', minWidth: '80px' }}>{label}</span>
       <span style={{
-        color: '#e8e8e8', fontSize: '13px', textAlign: 'right',
-        fontFamily: mono ? "'JetBrains Mono', 'Fira Code', monospace" : undefined,
+        color: 'var(--text-primary)', fontSize: 'var(--font-size-sm)', textAlign: 'right',
+        fontFamily: mono ? 'var(--font-mono)' : undefined,
       }}>
         {value}
       </span>
@@ -50,7 +50,7 @@ export default function Optimization({ session }) {
   if (!cycles || cycles.length === 0) {
     return (
       <div>
-        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#444', fontSize: '12px', letterSpacing: '0.3px' }}>
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-faint)', fontSize: 'var(--font-size-xs)', letterSpacing: '0.3px' }}>
           NO OPTIMIZATION DATA
         </div>
         <ParameterPresets sessionId={session.session_id} />
@@ -68,14 +68,14 @@ export default function Optimization({ session }) {
       <SectionTitle label="Optimization" />
 
       <Card title="Symbols">
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-xs)', alignItems: 'center' }}>
           <input value={symbolsInput} onChange={e => setSymbolsInput(e.target.value)}
             placeholder="AAPL, MSFT, GOOGL"
-            style={{ flex: 1, padding: '8px 12px', borderRadius: '6px', border: '1px solid #2a2a2a', background: '#161616', color: '#e8e8e8', fontSize: '13px', fontFamily: 'monospace' }} />
-          <span style={{ fontSize: '10px', color: '#555' }}>Comma-separated tickers</span>
+            style={{ flex: 1, padding: 'var(--space-xs) var(--space-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-input)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 'var(--font-size-sm)', fontFamily: 'var(--font-mono)' }} />
+          <span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-dim)' }}>Comma-separated tickers</span>
         </div>
         {specSymbols.length > 1 && (
-          <div style={{ marginTop: '8px', fontSize: '11px', color: '#22c55e' }}>
+          <div style={{ marginTop: 'var(--space-xs)', fontSize: 'var(--font-size-2xs)', color: 'var(--green)' }}>
             Multi-symbol optimization ({specSymbols.length} symbols)
           </div>
         )}
@@ -84,19 +84,19 @@ export default function Optimization({ session }) {
       <Card title="Sharpe & DSR by Cycle">
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="2 2" stroke="#1e1e1e" />
-            <XAxis dataKey="cycle" stroke="#444" tick={{ fontSize: 10 }} />
-            <YAxis stroke="#444" tick={{ fontSize: 10 }} />
-            <Tooltip contentStyle={{ background: '#111', border: '1px solid #1e1e1e', borderRadius: '4px', fontSize: '11px' }} />
-            <Legend wrapperStyle={{ fontSize: '11px', color: '#888' }} />
-            <Line type="monotone" dataKey="sharpe" stroke="#888" strokeWidth={1} dot={{ r: 3, fill: '#888' }} />
-            <Line type="monotone" dataKey="dsr" stroke="#aaa" strokeWidth={1} dot={{ r: 3, fill: '#aaa' }} />
+            <CartesianGrid strokeDasharray="2 2" stroke="var(--border)" />
+            <XAxis dataKey="cycle" stroke="var(--text-faint)" tick={{ fontSize: 10 }} />
+            <YAxis stroke="var(--text-faint)" tick={{ fontSize: 10 }} />
+            <Tooltip contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--font-size-2xs)' }} />
+            <Legend wrapperStyle={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-muted)' }} />
+            <Line type="monotone" dataKey="sharpe" stroke="var(--text-muted)" strokeWidth={1} dot={{ r: 3, fill: 'var(--text-muted)' }} />
+            <Line type="monotone" dataKey="dsr" stroke="var(--text-secondary)" strokeWidth={1} dot={{ r: 3, fill: 'var(--text-secondary)' }} />
           </LineChart>
         </ResponsiveContainer>
       </Card>
 
       <Card title="Cycle History">
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #1e1e1e', fontSize: '11px', color: '#555' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 'var(--font-size-2xs)', color: 'var(--text-dim)' }}>
           <span style={{ minWidth: '24px' }}>#</span>
           <span style={{ minWidth: '70px' }}>Sharpe</span>
           <span style={{ minWidth: '70px' }}>DSR</span>
@@ -110,10 +110,10 @@ export default function Optimization({ session }) {
         ))}
           {cycling && (
             <div style={{
-              marginTop: '12px', padding: '8px 12px',
-              background: '#1e1e1e', borderRadius: '4px',
-              fontSize: '11px', color: '#d0d030',
-              border: '1px solid #2a2a1a',
+              marginTop: 'var(--space-sm)', padding: '8px 12px',
+              background: 'var(--bg-hover)', borderRadius: 'var(--radius-sm)',
+              fontSize: 'var(--font-size-2xs)', color: 'var(--yellow)',
+              border: '1px solid var(--border)',
             }}>
               ⚠ Cycling detected — optimization will be abandoned
             </div>
@@ -161,16 +161,16 @@ function ParameterPresets({ sessionId }) {
     if (res.ok) loadPresets();
   };
 
-  const tbodyStyle = { borderBottom: '1px solid #1a1a1a' };
-  const tdStyle = { padding: '8px 12px', fontSize: '12px', color: '#888' };
+  const tbodyStyle = { borderBottom: '1px solid var(--border)' };
+  const tdStyle = { padding: '8px 12px', fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' };
 
   return (
     <Card title="Parameter Presets">
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 'var(--space-xs)', marginBottom: 'var(--space-sm)', alignItems: 'center' }}>
         <input placeholder="Preset name" value={name} onChange={e => setName(e.target.value)}
-          style={{ flex: 1, padding: '6px 10px', borderRadius: '6px', border: '1px solid #2a2a2a', background: '#161616', color: '#e8e8e8', fontSize: '12px' }} />
+          style={{ flex: 1, padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-input)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 'var(--font-size-xs)' }} />
         <select value={strategyType} onChange={e => setStrategyType(e.target.value)}
-          style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #2a2a2a', background: '#161616', color: '#aaa', fontSize: '12px' }}>
+          style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-input)', background: 'var(--bg-card)', color: 'var(--text-secondary)', fontSize: 'var(--font-size-xs)' }}>
           <option value="momentum">Momentum</option>
           <option value="mean_reversion">Mean Reversion</option>
           <option value="breakout">Breakout</option>
@@ -178,28 +178,28 @@ function ParameterPresets({ sessionId }) {
           <option value="dca">DCA</option>
         </select>
         <button onClick={savePreset} disabled={!name || !params}
-          style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid #2e2e2e', background: 'transparent', color: name ? '#aaa' : '#333', fontSize: '12px', cursor: name ? 'pointer' : 'default' }}>
+          style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: name ? 'var(--text-secondary)' : 'var(--text-faint)', fontSize: 'var(--font-size-xs)', cursor: name ? 'pointer' : 'default' }}>
           Save
         </button>
       </div>
       <div style={{ position: 'relative' }}>
         <textarea value={params} onChange={e => setParams(e.target.value)}
           placeholder='{"fast_ma": 20, "slow_ma": 50, "rsi_threshold": 30}'
-          style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #2a2a2a', background: '#161616', color: '#e8e8e8', fontSize: '11px', fontFamily: 'monospace', minHeight: '60px', resize: 'vertical', outline: 'none' }} />
+          style={{ width: '100%', padding: 'var(--space-xs)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-input)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 'var(--font-size-2xs)', fontFamily: 'var(--font-mono)', minHeight: '60px', resize: 'vertical', outline: 'none' }} />
       </div>
       {presets.length > 0 && (
         <div style={{ marginTop: '12px' }}>
-          <div style={{ display: 'flex', padding: '6px 12px', fontSize: '10px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #1e1e1e' }}>
+          <div style={{ display: 'flex', padding: '6px 12px', fontSize: 'var(--font-size-2xs)', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid var(--border)' }}>
             <span style={{ flex: 1 }}>Name</span>
             <span style={{ width: '100px' }}>Type</span>
             <span style={{ width: '20px' }}></span>
           </div>
           {presets.map(p => (
-            <div key={p.preset_id} style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', borderBottom: '1px solid #1a1a1a' }}>
-              <span style={{ flex: 1, color: '#e8e8e8', fontSize: '12px' }}>{p.name}</span>
-              <span style={{ width: '100px', color: '#555', fontSize: '11px' }}>{p.strategy_type}</span>
+            <div key={p.preset_id} style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
+              <span style={{ flex: 1, color: 'var(--text-primary)', fontSize: 'var(--font-size-xs)' }}>{p.name}</span>
+              <span style={{ width: '100px', color: 'var(--text-dim)', fontSize: 'var(--font-size-2xs)' }}>{p.strategy_type}</span>
               <button onClick={() => deletePreset(p.preset_id)}
-                style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '14px', padding: '2px' }} title="Delete">
+                style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', fontSize: '14px', padding: '2px' }} title="Delete">
                 ✕
               </button>
             </div>
@@ -207,7 +207,7 @@ function ParameterPresets({ sessionId }) {
         </div>
       )}
       {presets.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '20px', color: '#444', fontSize: '11px', fontStyle: 'italic' }}>
+        <div style={{ textAlign: 'center', padding: 'var(--space-md)', color: 'var(--text-faint)', fontSize: 'var(--font-size-2xs)', fontStyle: 'italic' }}>
           No saved presets
         </div>
       )}

@@ -14,13 +14,13 @@ const STATUS_BADGE = {
 
 function SectionTitle({ label, badge }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-      <span style={{ fontSize: '20px', fontWeight: 600, color: '#e8e8e8' }}>{label}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)' }}>
+      <span style={{ fontSize: 'var(--font-size-xl)', fontWeight: 600, color: 'var(--text-primary)' }}>{label}</span>
       {badge && (
         <span style={{
-          padding: '2px 12px', borderRadius: '9999px',
-          fontSize: '11px', border: '1px solid #333',
-          color: '#aaa', background: 'transparent',
+          padding: '2px 12px', borderRadius: 'var(--radius-full)',
+          fontSize: 'var(--font-size-2xs)', border: '1px solid var(--border)',
+          color: 'var(--text-secondary)', background: 'transparent',
         }}>
           {badge}
         </span>
@@ -31,19 +31,19 @@ function SectionTitle({ label, badge }) {
 
 function DotStepper({ steps, current }) {
   return (
-    <div style={{ marginBottom: '24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+    <div style={{ marginBottom: 'var(--space-lg)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-xs)' }}>
         {steps.map((s, i) => (
           <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, position: 'relative' }}>
             <div style={{
               width: '8px', height: '8px', borderRadius: '50%',
-              background: i <= current ? '#e8e8e8' : '#1e1e1e',
+              background: i <= current ? 'var(--text-primary)' : 'var(--bg-hover)',
               marginBottom: '6px', transition: 'background 0.3s',
               position: 'relative', zIndex: 1,
             }} />
             <span style={{
               fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.4px',
-              color: i === current ? '#e8e8e8' : i < current ? '#888' : '#444',
+              color: i === current ? 'var(--text-primary)' : i < current ? 'var(--text-muted)' : 'var(--text-faint)',
               fontWeight: i === current ? 600 : 400,
               textAlign: 'center', whiteSpace: 'nowrap',
             }}>
@@ -52,10 +52,10 @@ function DotStepper({ steps, current }) {
           </div>
         ))}
       </div>
-      <div style={{ height: '1px', background: '#1e1e1e', marginTop: '-4px', position: 'relative' }}>
+      <div style={{ height: '1px', background: 'var(--bg-hover)', marginTop: '-4px', position: 'relative' }}>
         <div style={{
           height: '100%', width: `${((current + 1) / steps.length) * 100}%`,
-          background: '#555', transition: 'width 0.4s',
+          background: 'var(--text-dim)', transition: 'width 0.4s',
         }} />
       </div>
     </div>
@@ -64,8 +64,8 @@ function DotStepper({ steps, current }) {
 
 function InfoCard({ title, children }) {
   return (
-    <div style={{ background: '#161616', border: '1px solid #1e1e1e', borderRadius: '8px', padding: '20px', marginBottom: '20px' }}>
-      <div style={{ fontSize: '13px', fontWeight: 500, color: '#e8e8e8', marginBottom: '16px' }}>{title}</div>
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-md)', marginBottom: 'var(--space-md)' }}>
+      <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 500, color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>{title}</div>
       {children}
     </div>
   );
@@ -75,10 +75,10 @@ function Row({ label, value }) {
   return (
     <div style={{
       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      padding: '10px 0', borderBottom: '1px solid #1a1a1a', fontSize: '13px',
+      padding: '10px 0', borderBottom: '1px solid var(--border)', fontSize: 'var(--font-size-sm)',
     }}>
-      <span style={{ color: '#555' }}>{label}</span>
-      <span style={{ color: '#e8e8e8', fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', monospace", fontSize: '13px' }}>
+      <span style={{ color: 'var(--text-dim)' }}>{label}</span>
+      <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 'var(--font-size-sm)' }}>
         {value}
       </span>
     </div>
@@ -109,8 +109,8 @@ export default function Overview({ session }) {
       {session.sessionId && (
         <button onClick={session.fetchState}
           style={{
-            padding: '8px 16px', borderRadius: '6px', border: '1px solid #2e2e2e',
-            background: 'transparent', color: '#aaa', fontSize: '13px',
+            padding: 'var(--space-xs) var(--space-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)',
+            background: 'transparent', color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)',
             cursor: 'pointer',
           }}>
           Refresh State

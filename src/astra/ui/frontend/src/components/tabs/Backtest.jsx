@@ -3,7 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import useWebSocket from '../../hooks/useWebSocket';
 
 function SectionTitle({ label }) {
-  return <div style={{ fontSize: '20px', fontWeight: 600, color: '#e8e8e8', marginBottom: '24px' }}>{label}</div>;
+  return <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 'var(--space-lg)' }}>{label}</div>;
 }
 
 export default function Backtest({ session }) {
@@ -92,7 +92,7 @@ export default function Backtest({ session }) {
     return e;
   }) || [];
 
-  const card = { background: '#161616', border: '1px solid #1e1e1e', borderRadius: '8px', padding: '20px', marginBottom: '20px' };
+  const card = { background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-md)', marginBottom: 'var(--space-md)' };
 
   return (
     <div>
@@ -100,19 +100,19 @@ export default function Backtest({ session }) {
 
       {/* Real-time progress bar */}
       {progress && (
-        <div style={{ background: '#161616', border: '1px solid #1e1e1e', borderRadius: '8px', padding: '16px 20px', marginBottom: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '12px', color: '#e8e8e8', fontWeight: 500 }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-sm) var(--space-md)', marginBottom: 'var(--space-md)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-xs)' }}>
+            <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-primary)', fontWeight: 500 }}>
               {progress.stage || 'Processing...'}
             </span>
-            <span style={{ fontSize: '11px', color: '#555' }}>
+            <span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-dim)' }}>
               {progress.current ?? 0} / {progress.total ?? 0}
             </span>
           </div>
-          <div style={{ width: '100%', height: '4px', background: '#1e1e1e', borderRadius: '2px', overflow: 'hidden' }}>
+          <div style={{ width: '100%', height: '4px', background: 'var(--bg-hover)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
             <div style={{
               width: `${progress.total ? ((progress.current || 0) / progress.total) * 100 : 0}%`,
-              height: '100%', background: '#888', borderRadius: '2px',
+              height: '100%', background: 'var(--text-muted)', borderRadius: 'var(--radius-sm)',
               transition: 'width 0.3s ease',
             }} />
           </div>
@@ -121,14 +121,14 @@ export default function Backtest({ session }) {
 
       {/* TradingView chart */}
       <div style={card}>
-        <div style={{ fontSize: '13px', fontWeight: 500, color: '#e8e8e8', marginBottom: '12px' }}>Market Overview</div>
+        <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 500, color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>Market Overview</div>
         <div
           id="tv-chart"
           ref={chartRef}
-          style={{ width: '100%', height: '420px', background: '#0a0a0a', borderRadius: '4px', overflow: 'hidden' }}
+          style={{ width: '100%', height: '420px', background: 'var(--bg-base)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}
         />
         {!tvReady && (
-          <div style={{ textAlign: 'center', padding: '20px', color: '#555', fontSize: '11px' }}>
+          <div style={{ textAlign: 'center', padding: 'var(--space-md)', color: 'var(--text-dim)', fontSize: 'var(--font-size-2xs)' }}>
             Loading chart...
           </div>
         )}
@@ -136,51 +136,51 @@ export default function Backtest({ session }) {
 
       {/* CPCV equity curves */}
       <div style={card}>
-        <div style={{ fontSize: '13px', fontWeight: 500, color: '#e8e8e8', marginBottom: '12px' }}>CPCV Equity Curves</div>
+        <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 500, color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>CPCV Equity Curves</div>
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '20px', color: '#555', fontSize: '11px' }}>AWAITING DATA</div>
+          <div style={{ textAlign: 'center', padding: 'var(--space-md)', color: 'var(--text-dim)', fontSize: 'var(--font-size-2xs)' }}>AWAITING DATA</div>
         ) : cpcvData ? (
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="2 2" stroke="#1e1e1e" />
-              <XAxis dataKey="step" stroke="#444" tick={{ fontSize: 10 }} />
-              <YAxis stroke="#444" tick={{ fontSize: 10 }} />
-              <Tooltip contentStyle={{ background: '#111', border: '1px solid #1e1e1e', borderRadius: '4px', fontSize: '11px' }} />
-              <Legend wrapperStyle={{ fontSize: '11px', color: '#888' }} />
+              <CartesianGrid strokeDasharray="2 2" stroke="var(--border)" />
+              <XAxis dataKey="step" stroke="var(--text-faint)" tick={{ fontSize: 10 }} />
+              <YAxis stroke="var(--text-faint)" tick={{ fontSize: 10 }} />
+              <Tooltip contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--font-size-2xs)' }} />
+              <Legend wrapperStyle={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-muted)' }} />
               {cpcvData.map((_, i) => (
                 <Line key={i} type="monotone" dataKey={`p${i+1}`}
-                  stroke={['#888', '#666', '#aaa'][i % 3]} dot={false} strokeWidth={1} />
+                  stroke={['var(--text-muted)', 'var(--text-dim)', 'var(--text-secondary)'][i % 3]} dot={false} strokeWidth={1} />
               ))}
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <div style={{ textAlign: 'center', padding: '20px', color: '#444', fontSize: '11px' }}>No CPCV data yet</div>
+          <div style={{ textAlign: 'center', padding: 'var(--space-md)', color: 'var(--text-faint)', fontSize: 'var(--font-size-2xs)' }}>No CPCV data yet</div>
         )}
       </div>
 
       {/* Drawdown */}
       <div style={card}>
-        <div style={{ fontSize: '13px', fontWeight: 500, color: '#e8e8e8', marginBottom: '12px' }}>Drawdown</div>
+        <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 500, color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>Drawdown</div>
         {drawdownData ? (
           <ResponsiveContainer width="100%" height={160}>
             <ComposedChart data={drawdownData}>
-              <CartesianGrid strokeDasharray="2 2" stroke="#1e1e1e" />
-              <XAxis dataKey="period" stroke="#444" tick={{ fontSize: 10 }} />
-              <YAxis stroke="#444" tick={{ fontSize: 10 }} />
-              <Tooltip contentStyle={{ background: '#111', border: '1px solid #1e1e1e', borderRadius: '4px', fontSize: '11px' }} />
-              <Area type="monotone" dataKey="dd" fill="#2a1a1a" stroke="#ef5350" strokeWidth={1} />
+              <CartesianGrid strokeDasharray="2 2" stroke="var(--border)" />
+              <XAxis dataKey="period" stroke="var(--text-faint)" tick={{ fontSize: 10 }} />
+              <YAxis stroke="var(--text-faint)" tick={{ fontSize: 10 }} />
+              <Tooltip contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--font-size-2xs)' }} />
+              <Area type="monotone" dataKey="dd" fill="#2a1a1a" stroke="var(--red)" strokeWidth={1} />
             </ComposedChart>
           </ResponsiveContainer>
         ) : (
-          <div style={{ textAlign: 'center', padding: '20px', color: '#444', fontSize: '11px' }}>No drawdown data</div>
+          <div style={{ textAlign: 'center', padding: 'var(--space-md)', color: 'var(--text-faint)', fontSize: 'var(--font-size-2xs)' }}>No drawdown data</div>
         )}
       </div>
 
       {/* Metrics */}
       {metrics && (
         <div style={card}>
-          <div style={{ fontSize: '13px', fontWeight: 500, color: '#e8e8e8', marginBottom: '16px' }}>Metrics</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+          <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 500, color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>Metrics</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}>
               {[
                 ['Mean Sharpe (CPCV)', metrics.meanSharpe?.toFixed(3)],
                 ['Deflated Sharpe (DSR)', metrics.dsr?.toFixed(3)],
@@ -188,9 +188,9 @@ export default function Backtest({ session }) {
                 ['Annualized Return', metrics.totalReturn != null ? `${(metrics.totalReturn * 100).toFixed(1)}%` : '\u2014'],
                 ['Total Trades', metrics.totalTrades != null ? metrics.totalTrades : '\u2014'],
               ].map(([k, v]) => (
-              <div key={k} style={{ background: '#111', padding: '12px', borderRadius: '4px', borderLeft: '3px solid #555' }}>
-                <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px', fontWeight: 500 }}>{k}</div>
-                <div style={{ fontSize: '14px', fontWeight: 500, color: '#e8e8e8', fontFamily: "'JetBrains Mono', 'Fira Code', monospace" }}>{v}</div>
+              <div key={k} style={{ background: 'var(--bg-surface)', padding: 'var(--space-sm)', borderRadius: 'var(--radius-sm)', borderLeft: '3px solid var(--text-dim)' }}>
+                <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-dim)', marginBottom: 'var(--space-xs)', fontWeight: 500 }}>{k}</div>
+                <div style={{ fontSize: 'var(--font-size-md)', fontWeight: 500, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{v}</div>
               </div>
             ))}
           </div>
@@ -207,8 +207,8 @@ export default function Backtest({ session }) {
 function Pill({ label }) {
   return (
     <span style={{
-      padding: '3px 12px', borderRadius: '9999px', fontSize: '11px', fontWeight: 500,
-      border: '1px solid #444', color: '#aaa', background: 'transparent',
+      padding: '3px 12px', borderRadius: 'var(--radius-full)', fontSize: 'var(--font-size-2xs)', fontWeight: 500,
+      border: '1px solid var(--border)', color: 'var(--text-secondary)', background: 'transparent',
     }}>
       {label}
     </span>

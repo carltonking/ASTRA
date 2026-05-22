@@ -18,10 +18,10 @@ const EXPORT_STEPS = [
 
 function SectionTitle({ label, badge }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-      <span style={{ fontSize: '20px', fontWeight: 600, color: '#e8e8e8' }}>{label}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)' }}>
+      <span style={{ fontSize: 'var(--font-size-xl)', fontWeight: 600, color: 'var(--text-primary)' }}>{label}</span>
       {badge && (
-        <span style={{ padding: '2px 12px', borderRadius: '9999px', fontSize: '11px', border: '1px solid #333', color: '#aaa', background: 'transparent' }}>
+        <span style={{ padding: '2px 12px', borderRadius: 'var(--radius-full)', fontSize: 'var(--font-size-2xs)', border: '1px solid var(--border)', color: 'var(--text-secondary)', background: 'transparent' }}>
           {badge}
         </span>
       )}
@@ -31,8 +31,8 @@ function SectionTitle({ label, badge }) {
 
 function Card({ title, children }) {
   return (
-    <div style={{ background: '#161616', border: '1px solid #1e1e1e', borderRadius: '8px', padding: '20px', marginBottom: '20px' }}>
-      {title && <div style={{ fontSize: '13px', fontWeight: 500, color: '#e8e8e8', marginBottom: '16px' }}>{title}</div>}
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-md)', marginBottom: 'var(--space-md)' }}>
+      {title && <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 500, color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>{title}</div>}
       {children}
     </div>
   );
@@ -60,7 +60,7 @@ export default function Graduation({ session }) {
 
   if (!graduationData) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px', color: '#444', fontSize: '12px', letterSpacing: '0.3px' }}>
+      <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-faint)', fontSize: 'var(--font-size-xs)', letterSpacing: '0.3px' }}>
         LOADING...
       </div>
     );
@@ -101,7 +101,7 @@ export default function Graduation({ session }) {
 
   if (gateEntries.length === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px', color: '#444', fontSize: '12px', letterSpacing: '0.3px' }}>
+      <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-faint)', fontSize: 'var(--font-size-xs)', letterSpacing: '0.3px' }}>
         NO GRADUATION DATA
       </div>
     );
@@ -113,30 +113,30 @@ export default function Graduation({ session }) {
 
       {/* Gate progress bars */}
       <Card title="Gates">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
           {gateEntries.map(gate => {
             const fill = Math.min(100, gate.threshold > 0 ? (gate.actual / gate.threshold) * 100 : 0);
             return (
               <div key={gate.name}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span style={{ fontSize: '12px', color: '#e8e8e8', fontWeight: 500 }}>{gate.name}</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-primary)', fontWeight: 500 }}>{gate.name}</span>
                   <span style={{
-                    padding: '1px 8px', borderRadius: '9999px', fontSize: '10px',
-                    border: `1px solid ${gate.passed ? '#333' : '#444'}`,
-                    color: gate.passed ? '#aaa' : '#666', background: 'transparent',
+                    padding: '1px 8px', borderRadius: 'var(--radius-full)', fontSize: 'var(--font-size-2xs)',
+                    border: `1px solid ${gate.passed ? 'var(--border)' : 'var(--border-light)'}`,
+                    color: gate.passed ? 'var(--text-secondary)' : 'var(--text-dim)', background: 'transparent',
                   }}>
                     {gate.passed ? 'PASSED' : 'FAILED'}
                   </span>
                 </div>
-                <div style={{ fontSize: '11px', color: '#555', marginBottom: '6px' }}>
+                <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-dim)', marginBottom: '6px' }}>
                   {typeof gate.actual === 'number' ? gate.actual.toFixed(3) : gate.actual}
                   {' / '}
                   {typeof gate.threshold === 'number' ? gate.threshold.toFixed(3) : gate.threshold}
                 </div>
-                <div style={{ height: '2px', background: '#1e1e1e', borderRadius: '1px' }}>
+                <div style={{ height: '2px', background: 'var(--bg-hover)', borderRadius: '1px' }}>
                   <div style={{
                     height: '100%', width: `${fill}%`,
-                    background: gate.passed ? '#22c55e' : '#555',
+                    background: gate.passed ? 'var(--green)' : 'var(--text-dim)',
                     borderRadius: '1px', transition: 'width 0.3s',
                   }} />
                 </div>
@@ -145,7 +145,7 @@ export default function Graduation({ session }) {
           })}
         </div>
         {!graduated && closestGate && (
-          <div style={{ marginTop: '16px', padding: '8px 12px', background: '#1e1e1e', borderRadius: '4px', fontSize: '11px', color: '#888' }}>
+          <div style={{ marginTop: 'var(--space-sm)', padding: '8px 12px', background: 'var(--bg-hover)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--font-size-2xs)', color: 'var(--text-muted)' }}>
             Closest: {closestGate.name} (gap {closestGate.gap.toFixed(3)})
           </div>
         )}
@@ -154,18 +154,18 @@ export default function Graduation({ session }) {
       {/* Certificate */}
       {graduated && (
         <Card title="Certificate">
-          <div style={{ border: '1px solid #1e1e1e', padding: '20px', borderRadius: '6px', background: '#111' }}>
-            <div style={{ fontSize: '12px', color: '#e8e8e8', marginBottom: '8px', fontFamily: "'JetBrains Mono', 'Fira Code', monospace", letterSpacing: '0.5px' }}>
+          <div style={{ border: '1px solid var(--border)', padding: 'var(--space-md)', borderRadius: 'var(--radius-md)', background: 'var(--bg-surface)' }}>
+            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-primary)', marginBottom: 'var(--space-xs)', fontFamily: 'var(--font-mono)', letterSpacing: '0.5px' }}>
               ASTRA-{session.sessionId?.slice(0, 8)}-GRAD
             </div>
-            <div style={{ fontSize: '11px', color: '#555', marginBottom: '16px' }}>
+            <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-dim)', marginBottom: 'var(--space-sm)' }}>
               Issued: {new Date().toLocaleDateString()}
             </div>
             <button onClick={() => { if (!exporting) setExporting(true); }} disabled={exporting}
               style={{
-                padding: '8px 16px', borderRadius: '6px', border: '1px solid #2e2e2e',
-                background: 'transparent', color: '#aaa', fontSize: '13px',
-                cursor: 'pointer', marginBottom: '12px',
+                padding: 'var(--space-xs) var(--space-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)',
+                background: 'transparent', color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)',
+                cursor: 'pointer', marginBottom: 'var(--space-sm)',
               }}>
               {exporting ? 'Packaging...' : 'Export Strategy'}
             </button>
@@ -179,9 +179,9 @@ export default function Graduation({ session }) {
                   const completed = done || idx > cur;
                   return (
                     <div key={step.id} style={{
-                      display: 'flex', alignItems: 'center', gap: '8px',
-                      padding: '3px 0', fontSize: '11px',
-                      color: active ? '#e8e8e8' : completed ? '#666' : '#333',
+                      display: 'flex', alignItems: 'center', gap: 'var(--space-xs)',
+                      padding: '3px 0', fontSize: 'var(--font-size-2xs)',
+                      color: active ? 'var(--text-primary)' : completed ? 'var(--text-dim)' : 'var(--text-faint)',
                     }}>
                       <span style={{ fontSize: '10px' }}>{active ? '\u25B6' : completed ? '\u2713' : '\u25CB'}</span>
                       {step.label}
@@ -190,8 +190,8 @@ export default function Graduation({ session }) {
                 })}
               </div>
             )}
-            <div style={{ fontSize: '10px', color: '#444', lineHeight: '1.8' }}>
-              <div style={{ fontWeight: 500, color: '#666', marginBottom: '4px' }}>Limitations:</div>
+            <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-faint)', lineHeight: '1.8' }}>
+              <div style={{ fontWeight: 500, color: 'var(--text-dim)', marginBottom: 'var(--space-xs)' }}>Limitations:</div>
               <ul style={{ margin: 0, paddingLeft: '16px' }}>
                 {LIMITATIONS.map((lim, i) => <li key={i}>{lim}</li>)}
               </ul>
