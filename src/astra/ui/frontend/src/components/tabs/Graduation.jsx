@@ -58,6 +58,34 @@ export default function Graduation({ session }) {
     return () => { cancelled = true; };
   }, [session?.sessionId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      for (const step of EXPORT_STEPS) {
+        if (cancelled) break;
+        setExportProgress({ step: step.id, done: false });
+        await new Promise(r => setTimeout(r, 600));
+      }
+      if (typeof session?.doExport !== 'function') {
+        if (!cancelled) { setExportProgress(prev => ({ ...prev, done: true })); }
+        return;
+      }
+      try {
+        const result = await session.doExport();
+        if (!cancelled) {
+          setExportProgress(prev => ({ ...prev, done: true }));
+          if (result?.strategy_url) window.open(result.strategy_url, '_blank');
+          if (result?.report_url) window.open(result.report_url, '_blank');
+        }
+      } catch {
+        if (!cancelled) setExportProgress(prev => ({ ...prev, done: true }));
+      }
+      if (!cancelled) setTimeout(() => { setExporting(false); setExportProgress(null); }, 2000);
+    };
+    if (exporting && !exportProgress) run();
+    return () => { cancelled = true; };
+  }, [exporting, exportProgress, session]);
+
   if (!graduationData) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-faint)', fontSize: 'var(--font-size-xs)', letterSpacing: '0.3px' }}>
@@ -66,38 +94,18 @@ export default function Graduation({ session }) {
     );
   }
 
-  const gateResults = graduationData.certificate?.gate_results || {};
-  const progress = graduationData.progress || [];
-  const isGraduated = graduationData.is_graduated || false;
+  const gateResults = graduationData?.certificate?.gate_results || {};
+  const isGraduated = graduationData?.is_graduated || false;
 
   const gateEntries = Object.entries(gateResults).map(([name, g]) => ({
-    name, threshold: g.threshold_value ?? 0, actual: g.actual_value ?? 0,
-    passed: g.status === 'PASSED', gap: g.gap ?? 0,
+    name, threshold: g?.threshold_value ?? 0, actual: g?.actual_value ?? 0,
+    passed: g?.status === 'PASSED', gap: g?.gap ?? 0,
   }));
   const graduated = isGraduated || (gateEntries.length > 0 && gateEntries.every(g => g.passed));
   const passedCount = gateEntries.filter(g => g.passed).length;
-  const closestGate = [...gateEntries].sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap))[0];
-
-  useEffect(() => {
-    let cancelled = false;
-    if (exporting && !exportProgress) {
-      (async () => {
-        for (const step of EXPORT_STEPS) {
-          if (cancelled) break;
-          setExportProgress({ step: step.id, done: false });
-          await new Promise(r => setTimeout(r, 600));
-        }
-        const result = await session.doExport();
-        if (!cancelled) {
-          setExportProgress(prev => ({ ...prev, done: true }));
-          if (result?.strategy_url) window.open(result.strategy_url, '_blank');
-          if (result?.report_url) window.open(result.report_url, '_blank');
-        }
-        if (!cancelled) setTimeout(() => { setExporting(false); setExportProgress(null); }, 2000);
-      })();
-    }
-    return () => { cancelled = true; };
-  }, [exporting]);
+  const closestGate = gateEntries.length > 0
+    ? [...gateEntries].sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap))[0]
+    : null;
 
   if (gateEntries.length === 0) {
     return (
