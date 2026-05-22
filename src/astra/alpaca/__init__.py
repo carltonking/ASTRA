@@ -9,7 +9,6 @@ from astra.alpaca.client import (
 )
 from astra.alpaca.deployer import StrategyDeployer, Deployment, CycleResult
 from astra.alpaca.monitor import PerformanceMonitor, PerformanceSnapshot, DegradationReport
-from astra.alpaca.monitor_loop import PerformanceMonitoringLoop, MonitoringCheckResult
 from astra.alpaca.exceptions import (
     LiveTradingBlockedError,
     ShortSellingBlockedError,
@@ -33,6 +32,4 @@ __all__ = [
     "ShortSellingBlockedError",
     "DeploymentError",
     "AlpacaConnectionError",
-    "PerformanceMonitoringLoop",
-    "MonitoringCheckResult",
 ]

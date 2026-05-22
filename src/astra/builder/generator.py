@@ -166,7 +166,6 @@ class StrategyGenerator:
 
     @staticmethod
     def _get_bounds_for_type(strategy_type: str) -> dict[str, tuple]:
-        from astra.builder.templates import DEFAULT_PARAMETERS_BY_TYPE
 
         _BOUNDS_BY_TYPE = {
             "trend_following": {

@@ -1,6 +1,5 @@
 """Conversational strategy planner — LLM dialogue that produces a StrategySpec."""
 
-import json
 from typing import Any
 
 from astra.llm.provider import LLMProvider

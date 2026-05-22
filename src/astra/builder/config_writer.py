@@ -1,7 +1,12 @@
 """Writes AURORA-compatible strategy config YAML from a BuildResult."""
 
+from __future__ import annotations
+
 import os
 from typing import Any
+
+from astra.builder.generator import BuildResult
+from astra.planner.spec import StrategySpec
 
 
 def _yaml_value(val: Any, indent: int = 0) -> str:

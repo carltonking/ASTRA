@@ -1,20 +1,20 @@
 """FastAPI backend — provides REST API and WebSocket for the ASTRA UI."""
 
 
+import json
 import os
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-
-# Load .env from repo root
-load_dotenv(dotenv_path=Path(__file__).resolve().parents[4] / ".env")
 
 from astra.llm import create_llm_provider
 from astra.llm.provider import LLMProvider
@@ -24,19 +24,17 @@ from astra.builder.generator import StrategyGenerator
 from astra.pipeline.state import PipelineState, InvalidStatusTransition
 from astra.pipeline.runner import PipelineRunner
 from astra.pipeline.events import PipelineEventBus
-from astra.pipeline.aurora_bridge import AuroraBridge
-from astra.alpaca.monitor import PerformanceMonitor, PerformanceSnapshot
-from astra.alpaca.deployer import StrategyDeployer, Deployment
+from astra.alpaca.monitor import PerformanceSnapshot
 from astra.graduation.gates import GraduationGates
 from astra.graduation.tracker import GraduationTracker
-from astra.graduation.certificate import GraduationCertificate
-from astra.graduation.gates import GraduationError
-from astra.optimizer.history import OptimizationHistory
 from astra.export.packager import StrategyPackager, ExportPackage
 from astra.export.report import ReportGenerator
 from astra.storage import Storage
 from astra.ui.backend.session_store import SessionStore
 from astra.ui.backend.websocket import ws_manager
+
+# Load .env from repo root
+load_dotenv(dotenv_path=Path(__file__).resolve().parents[4] / ".env")
 
 
 _DISCLAIMER = (
@@ -108,7 +106,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="ASTRA", version="0.1.0", lifespan=lifespan)
 
-from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
@@ -424,7 +421,6 @@ async def delete_preset(session_id: str, preset_id: str):
 async def export_csv(session_id: str):
     """Download backtest results as CSV."""
     import io
-    import json
     import pandas as pd
     session = _deps.store.get(session_id)
     if session is None:
@@ -482,10 +478,6 @@ async def get_graduation(session_id: str):
         "certificate": json.loads(cert.to_json()) if cert else None,
         "disclaimer": _DISCLAIMER,
     }
-
-
-import json
-from datetime import datetime
 
 
 @app.post("/api/session/{session_id}/export")

@@ -3,14 +3,11 @@
 import hashlib
 import os
 import re
-import shutil
 import subprocess
 import sys
-import tempfile
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
 
 from astra.builder.generator import BuildResult
 from astra.planner.spec import StrategySpec
@@ -149,7 +146,7 @@ class StrategyPackager:
             param_lines.append(f"{key.upper()} = {val!r}")
 
         symbols_str = ", ".join(f"{s!r}" for s in spec.symbols)
-        limitations_str = "\n".join(f"  {i+1}. {l}" for i, l in enumerate(certificate.limitations))
+        limitations_str = "\n".join(f"  {i+1}. {lim}" for i, lim in enumerate(certificate.limitations))
 
         entry_str = spec.entry_conditions[0] if spec.entry_conditions else ""
         exit_str = spec.exit_conditions[0] if spec.exit_conditions else ""
@@ -181,8 +178,8 @@ class StrategyPackager:
         )
 
         certificate_lines = [
-            f"# ============================================================",
-            f"# GRADUATION CERTIFICATE",
+            "# ============================================================",
+            "# GRADUATION CERTIFICATE",
             f"# Certificate ID: {certificate.certificate_id}",
             f"# Session ID: {certificate.session_id}",
             f"# Spec ID: {certificate.spec_id}",
@@ -195,10 +192,9 @@ class StrategyPackager:
                 f"#   Gate [{gr.status}] {gr.gate_name}: actual={gr.actual_value}, "
                 f"threshold={gr.threshold_value}, gap={gr.gap}"
             )
-        certificate_lines.append(f"# ============================================================")
+        certificate_lines.append("# ============================================================")
         header = "\n".join(certificate_lines)
 
-        pipeline_metrics = pipeline_result.cpcv_summary or {}
         backtest_metrics = pipeline_result.backtest_metrics or {}
 
         gates_pass_count = sum(1 for g in certificate.gate_results.values() if g.status == "PASSED")
@@ -261,9 +257,9 @@ if __name__ == "__main__":
 '''
 
         exported_lines = [
-            f'"""',
+            '"""',
             docstring,
-            f'"""',
+            '"""',
             "",
             header,
             "",

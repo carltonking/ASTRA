@@ -8,6 +8,9 @@ from typing import Any
 
 import pandas as pd
 
+from astra.optimizer.proposer import ParameterProposal
+from astra.pipeline.runner import PipelineResult
+
 
 @dataclass
 class OptimizationHistory:

@@ -107,7 +107,7 @@ class GraduationCertificate:
     def to_text_block(self) -> str:
         lines = [
             "# ============================================================",
-            f"# GRADUATION CERTIFICATE",
+            "# GRADUATION CERTIFICATE",
             f"# Certificate ID: {self.certificate_id}",
             f"# Session ID: {self.session_id}",
             f"# Spec ID: {self.spec_id}",

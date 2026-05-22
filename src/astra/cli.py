@@ -5,18 +5,14 @@ import json
 import os
 import sys
 import uuid
-from datetime import datetime
 
 from astra.llm import create_llm_provider
 from astra.planner.spec import StrategySpec
 from astra.builder.generator import StrategyGenerator, BuildResult
-from astra.builder.templates import TEMPLATES_BY_TYPE, DEFAULT_PARAMETERS_BY_TYPE
-from astra.builder.sandbox import BuildSandbox
-from astra.pipeline.state import PipelineState
 from astra.pipeline.runner import PipelineRunner
 from astra.pipeline.events import PipelineEventBus
 from astra.pipeline.aurora_bridge import AuroraBridge
-from astra.alpaca.monitor import PerformanceSnapshot, DegradationReport
+from astra.alpaca.monitor import PerformanceSnapshot
 from astra.graduation import GraduationCertificate, GateResult
 from astra.export.packager import StrategyPackager
 
@@ -170,7 +166,6 @@ def _export_strategy(
     build_result: BuildResult,
     pipeline_result=None,
 ) -> None:
-    from astra.export.packager import StrategyPackager
 
     pipeline_result = pipeline_result or _stub_pipeline_result(spec)
     cert = _stub_certificate(spec)

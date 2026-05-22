@@ -1,10 +1,8 @@
 """Alpaca paper trading client — wraps alpaca-py for ASTRA's specific needs."""
 
-import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
 
 from astra.alpaca.exceptions import (
     LiveTradingBlockedError,
@@ -238,7 +236,7 @@ class AstraAlpacaClient:
 
     def get_bars(
         self, symbol: str, timeframe: str, start: str, end: str
-    ) -> "pd.DataFrame":
+    ):
         self._ensure_connected()
         import pandas as pd
 
