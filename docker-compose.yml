@@ -10,6 +10,17 @@ services:
     environment:
       - ASTRA_BUILD_DIR=/data/builds
       - ASTRA_EXPORT_DIR=/data/exports
+      - ASTRA_DATABASE_URL=postgresql+asyncpg://astra:astra@postgres:5432/astra
+      - ASTRA_REDIS_URL=redis://redis:6379/0
+      - ASTRA_ENABLE_PRODUCTION_PERSISTENCE=1
+      - ASTRA_ENABLE_DURABLE_EVENTS=1
+      - ASTRA_ENABLE_REDIS_EVENTS=1
+      - ASTRA_ENABLE_MANUAL_PAPER_ORDERS=0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - astra_data:/data
     healthcheck:
@@ -19,5 +30,32 @@ services:
       retries: 3
       start_period: 10s
 
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: astra
+      POSTGRES_PASSWORD: astra
+      POSTGRES_DB: astra
+    volumes:
+      - astra_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U astra -d astra"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - astra_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   astra_data:
+  astra_postgres:
+  astra_redis:

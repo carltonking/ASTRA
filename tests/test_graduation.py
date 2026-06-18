@@ -75,8 +75,8 @@ def _make_pipeline_result(**overrides) -> PipelineResult:
         status="DEPLOYED_PAPER",
         leakage_verdict="CLEAN",
         review_board_status="APPROVED",
-        cpcv_summary={"mean_sharpe": 1.8, "dsr": 1.6, "overfitting_probability": 0.08, "n_splits": 10},
-        backtest_metrics={"mean_sharpe": 1.8, "dsr": 1.6, "overfitting_probability": 0.08},
+        cpcv_summary={"mean_sharpe": 1.8, "dsr": 0.97, "overfitting_probability": 0.08, "n_splits": 10},
+        backtest_metrics={"mean_sharpe": 1.8, "dsr": 0.97, "overfitting_probability": 0.08},
         paper_deployment_id=str(uuid.uuid4()),
     )
     params.update(overrides)
@@ -88,7 +88,7 @@ def _make_pipeline_result(**overrides) -> PipelineResult:
 class TestGraduationGates:
     def test_loads_default_thresholds(self):
         gates = GraduationGates()
-        assert gates._thresholds["dsr"] == 1.5
+        assert gates._thresholds["dsr"] == 0.95
         assert gates._thresholds["annual_return"] == 0.05
         assert gates._thresholds["max_drawdown"] == 0.20
         assert gates._thresholds["min_trades"] == 20

@@ -8,6 +8,16 @@ import pandas as pd
 class BaseStrategy(ABC):
     STRATEGY_TYPE: str = ""
     STRATEGY_HYPOTHESIS: str = ""
+    STRATEGY_METADATA: dict = {}
+    SIZING_MODEL: dict = {}
+    LEVERAGE_CONSTRAINTS: dict = {"max_gross_leverage": 1.0, "allow_short": False}
+    RISK_CONTROLS: dict = {}
+    REGIME_ASSUMPTIONS: list[str] = []
+    ALLOWED_REGIMES: dict = {}
+    PROHIBITED_REGIMES: dict = {}
+    MIN_REGIME_CONFIDENCE: float = 0.0
+    EXECUTION_ASSUMPTIONS: dict = {}
+    INDICATOR_DEPENDENCIES: list[str] = []
 
     @abstractmethod
     def generate_signals(self, data: pd.DataFrame) -> pd.Series:
@@ -20,6 +30,20 @@ class BaseStrategy(ABC):
     @abstractmethod
     def get_parameter_bounds(self) -> dict:
         ...
+
+    def get_metadata(self) -> dict:
+        return dict(self.STRATEGY_METADATA)
+
+    def get_risk_controls(self) -> dict:
+        return dict(self.RISK_CONTROLS)
+
+    def get_regime_contract(self) -> dict:
+        return {
+            "assumptions": list(self.REGIME_ASSUMPTIONS),
+            "allowed_regimes": dict(self.ALLOWED_REGIMES),
+            "prohibited_regimes": dict(self.PROHIBITED_REGIMES),
+            "min_confidence": self.MIN_REGIME_CONFIDENCE,
+        }
 
 
 TREND_FOLLOWING_TEMPLATE = '''

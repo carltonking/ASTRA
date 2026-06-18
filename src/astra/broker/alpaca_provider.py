@@ -1,5 +1,6 @@
 """Alpaca broker provider — wraps AstraAlpacaClient into Broker ABC."""
 
+import os
 from typing import Any
 
 import pandas as pd
@@ -12,8 +13,8 @@ class AlpacaBroker(Broker):
     def __init__(self, **kwargs: Any):
         from astra.alpaca.client import AstraAlpacaClient
 
-        api_key = kwargs.get("api_key") or kwargs.get("key_id", "")
-        api_secret = kwargs.get("api_secret") or kwargs.get("secret_key", "")
+        api_key = kwargs.get("api_key") or kwargs.get("key_id") or os.environ.get("APCA_API_KEY_ID", "")
+        api_secret = kwargs.get("api_secret") or kwargs.get("secret_key") or os.environ.get("APCA_API_SECRET_KEY", "")
         base_url = kwargs.get("base_url", "https://paper-api.alpaca.markets")
         self._client = AstraAlpacaClient(
             api_key=api_key,

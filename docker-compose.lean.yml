@@ -1,0 +1,36 @@
+# Single-user lean stack — backend only.
+#
+# No Postgres, no Redis, no production-persistence flags. ASTRA falls back to
+# SQLite + in-memory event bus, which is all one user needs. Use this instead
+# of docker-compose.yml for local personal use:
+#
+#   docker compose -f docker-compose.lean.yml up --build
+#
+# Put your secrets (ANTHROPIC_API_KEY, APCA_API_KEY_ID, APCA_API_SECRET_KEY,
+# optional LSEG_APP_KEY) in .env — see .env.example.
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - ASTRA_BUILD_DIR=/data/builds
+      - ASTRA_EXPORT_DIR=/data/exports
+      # Production persistence intentionally OFF — single user runs on SQLite +
+      # in-memory events. Do not set ASTRA_ENABLE_* here.
+      - ASTRA_ENABLE_MANUAL_PAPER_ORDERS=0
+    volumes:
+      - astra_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  astra_data:

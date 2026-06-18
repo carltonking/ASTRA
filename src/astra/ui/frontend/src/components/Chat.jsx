@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
+import useWebSocket from '../hooks/useWebSocket';
 
 export default function Chat({ session }) {
   const [input, setInput] = useState('');
@@ -7,6 +8,16 @@ export default function Chat({ session }) {
   const [hoveredChip, setHoveredChip] = useState(null);
   const { sessionId, messages, loading, start, chat } = session;
   const timesRef = useRef([]);
+  const { lastEvents } = useWebSocket(sessionId);
+
+  // Latest tool-activity label while the assistant is working (fetching data, backtesting…).
+  const activity = (() => {
+    if (!loading) return null;
+    for (let i = lastEvents.length - 1; i >= 0; i--) {
+      if (lastEvents[i].event === 'chat.tool_start') return lastEvents[i].data?.label || 'working…';
+    }
+    return null;
+  })();
 
   useEffect(() => {
     msgsEnd.current?.scrollIntoView({ behavior: 'smooth' });
@@ -32,8 +43,8 @@ export default function Chat({ session }) {
   const fmt = (d) => d instanceof Date ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
   const chips = !sessionId
-    ? ['Momentum on SPY', 'Mean reversion on QQQ', 'Trend following on AAPL', 'Pairs: GOOGL/MSFT']
-    : ['Use daily data', 'Lower risk threshold', 'Show what you have', 'Run with defaults'];
+    ? ["What's SPY's recent volatility?", 'Which algorithm fits low-drawdown swing trading?', 'List your algorithms', 'Backtest momentum on AAPL']
+    : ['Run a quick backtest', 'Compare two algorithms', 'Search past results', 'Build this strategy'];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -46,9 +57,9 @@ export default function Chat({ session }) {
             alignSelf: 'center', textAlign: 'center', marginTop: '60px',
             color: 'var(--text-dim)', fontSize: '12px', lineHeight: 2,
           }}>
-            Describe a trading idea<br />
+            Ask about markets, algorithms, or build a strategy<br />
             <span style={{ color: 'var(--text-faint)', fontSize: '11px' }}>
-              e.g. &ldquo;Momentum on SPY with 50-day SMA filter&rdquo;
+              e.g. &ldquo;Which algorithm fits low-drawdown SPY swing trading?&rdquo;
             </span>
           </div>
         )}
@@ -80,7 +91,7 @@ export default function Chat({ session }) {
         ))}
         {loading && (
           <div style={{ alignSelf: 'flex-start', color: 'var(--text-muted)', fontSize: '11px', fontStyle: 'italic' }}>
-            thinking...
+            {activity || 'thinking…'}
           </div>
         )}
         <div ref={msgsEnd} />
@@ -113,7 +124,7 @@ export default function Chat({ session }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKey}
-          placeholder={sessionId ? 'Reply to ASTRA...' : 'Describe your strategy...'}
+          placeholder={sessionId ? 'Ask ASTRA anything about markets or strategies…' : 'Ask about markets, algorithms, or describe a strategy…'}
           disabled={loading}
           style={{
             flex: 1, padding: '9px 14px', borderRadius: 'var(--radius-lg)',
@@ -124,9 +135,9 @@ export default function Chat({ session }) {
         <button onClick={() => send()} disabled={loading}
           style={{
             padding: '9px 18px', borderRadius: 'var(--radius-md)', border: 'none',
-            background: 'var(--bg-button)', color: 'var(--text-primary)', fontSize: '13px',
-            fontWeight: 500, cursor: loading ? 'default' : 'pointer',
-            opacity: loading ? 0.4 : 1,
+            background: 'var(--accent)', color: '#fff', fontSize: '13px',
+            fontWeight: 600, cursor: loading ? 'default' : 'pointer',
+            opacity: loading ? 0.45 : 1,
           }}>
           Send
         </button>

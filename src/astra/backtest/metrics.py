@@ -1,6 +1,7 @@
 """Performance metrics for backtesting — Sharpe, DSR, drawdown, returns."""
 
 import math
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -30,7 +31,7 @@ def compute_returns(
         trade_events = aligned["signal"].diff().abs() > 0
         aligned.loc[trade_events, "returns"] -= transaction_cost
 
-    return aligned["returns"].dropna()
+    return cast(pd.Series, aligned["returns"]).dropna()
 
 
 def compute_portfolio_returns(
@@ -76,10 +77,20 @@ def compute_sharpe_ratio(
     """Compute annualized Sharpe ratio from a return series."""
     if len(returns) < 2:
         return 0.0
-    excess = returns - risk_free_rate / annual_factor
-    if excess.std() < 1e-12:
+    # Volatility is translation-invariant, so classify "constant" and compute
+    # std from the raw returns — not the risk-free-adjusted excess. Subtracting
+    # the per-period risk-free rate can otherwise collapse near-equal floats and
+    # make a varied series look degenerate for one rate but not another.
+    # `nunique` (not `std < eps`) is the right test: pandas reports a tiny
+    # non-zero std (~1e-18) for an identical-valued series; a fixed-floor
+    # threshold would break scale-invariance and flatten the sign of losers.
+    if returns.nunique(dropna=True) <= 1:
         return 0.0
-    return float(np.sqrt(annual_factor) * excess.mean() / excess.std())
+    std = float(returns.std())
+    if std == 0.0 or not np.isfinite(std):
+        return 0.0
+    excess_mean = float(returns.mean()) - risk_free_rate / annual_factor
+    return float(np.sqrt(annual_factor) * excess_mean / std)
 
 
 def compute_deflated_sharpe_ratio(

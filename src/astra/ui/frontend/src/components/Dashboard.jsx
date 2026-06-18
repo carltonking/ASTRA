@@ -5,11 +5,13 @@ import PaperTrading from './tabs/PaperTrading';
 import Optimization from './tabs/Optimization';
 import Graduation from './tabs/Graduation';
 import Comparison from './tabs/Comparison';
+import Autopilot from './tabs/Autopilot';
 
 const ALL_TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'backtest', label: 'Backtest' },
   { id: 'paper_trading', label: 'Paper Trading' },
+  { id: 'autopilot', label: 'Autopilot' },
   { id: 'optimization', label: 'Optimization' },
   { id: 'graduation', label: 'Graduation' },
   { id: 'comparison', label: 'Comparison' },
@@ -60,6 +62,7 @@ export default function Dashboard({ session }) {
       case 'overview': return <Overview session={session} />;
       case 'backtest': return <Backtest session={session} />;
       case 'paper_trading': return <PaperTrading session={session} isActive={activeTab === 'paper_trading'} />;
+      case 'autopilot': return <Autopilot session={session} isActive={activeTab === 'autopilot'} />;
       case 'optimization': return <Optimization session={session} />;
       case 'graduation': return <Graduation session={session} />;
       case 'comparison': return <Comparison session={session} />;

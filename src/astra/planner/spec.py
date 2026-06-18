@@ -4,6 +4,7 @@ import json
 import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
+from typing import Any
 
 
 _REQUIRED_FIELDS = [
@@ -47,6 +48,21 @@ class StrategySpec:
     stop_loss: float | None = None
     take_profit: float | None = None
     transaction_cost: float = 0.001
+    sizing_model: dict[str, Any] = field(default_factory=dict)
+    leverage_constraints: dict[str, Any] = field(default_factory=dict)
+    risk_controls: dict[str, Any] = field(default_factory=dict)
+    regime_assumptions: list[str] = field(default_factory=list)
+    allowed_regimes: dict[str, list[str]] = field(default_factory=dict)
+    prohibited_regimes: dict[str, list[str]] = field(default_factory=dict)
+    min_regime_confidence: float = 0.70
+    execution_assumptions: dict[str, Any] = field(default_factory=dict)
+    indicator_dependencies: list[str] = field(default_factory=list)
+    parent_strategy_id: str | None = None
+    mutation_source: str | None = None
+    generation_number: int = 0
+    prompt_ancestry: list[str] = field(default_factory=list)
+    validation_scores: dict[str, float] = field(default_factory=dict)
+    failure_reasons: list[str] = field(default_factory=list)
 
     backtest_start: str = ""
     backtest_end: str = ""
@@ -58,6 +74,31 @@ class StrategySpec:
     def __post_init__(self) -> None:
         if not self.spec_id:
             self.spec_id = str(uuid.uuid4())
+        if not self.sizing_model:
+            self.sizing_model = {
+                "type": "fixed_fraction",
+                "max_position_size": self.position_size,
+            }
+        if not self.leverage_constraints:
+            self.leverage_constraints = {
+                "max_gross_leverage": 1.0,
+                "allow_margin": False,
+                "allow_short": False,
+            }
+        if not self.risk_controls:
+            self.risk_controls = {
+                "stop_loss": self.stop_loss,
+                "take_profit": self.take_profit,
+                "max_positions": self.max_positions,
+                "max_drawdown": self.max_drawdown,
+            }
+        if not self.execution_assumptions:
+            self.execution_assumptions = {
+                "order_type": "market_on_next_bar",
+                "transaction_cost": self.transaction_cost,
+                "slippage_bps": 5,
+                "paper_trading_only": True,
+            }
         self._refresh_completeness()
 
     def _refresh_completeness(self) -> None:

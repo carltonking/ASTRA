@@ -3,7 +3,7 @@
 import json
 import os
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timezone
 
 import pytest
@@ -105,11 +105,9 @@ class TestSessionStart:
             assert "disclaimer" in data
 
     def test_handles_api_error(self, client):
-        with patch("astra.ui.backend.main.PlannerConversation") as MockConv:
-            mock_conv = MagicMock()
-            mock_conv.start.side_effect = Exception("API key invalid")
-            MockConv.return_value = mock_conv
-
+        # A non-rate-limit failure in the assistant turn surfaces as a 500.
+        with patch("astra.ui.backend.main._run_assistant",
+                   new=AsyncMock(side_effect=Exception("API key invalid"))):
             res = client.post("/api/session/start", json={"user_idea": "Test"})
             assert res.status_code == 500
 
@@ -119,32 +117,26 @@ class TestSessionStart:
 class TestChat:
     def test_returns_message(self, client):
         session_id = _setup_session()
-        with patch("astra.ui.backend.main.PlannerConversation") as MockConv:
-            mock_conv = MagicMock()
-            mock_conv.reply.return_value = "Good idea! What timeframe?"
-            mock_conv.is_complete.return_value = False
-            mock_conv.spec = None
-            MockConv.return_value = mock_conv
-
-            _deps.store.update(session_id, "conversation", mock_conv)
-
+        # Chat requires an active assistant on the session.
+        _deps.store.update(session_id, "assistant", MagicMock())
+        with patch("astra.ui.backend.main._run_assistant",
+                   new=AsyncMock(return_value="Good idea! What timeframe?")):
             res = client.post(f"/api/session/{session_id}/chat", json={"message": "Daily"})
             assert res.status_code == 200
             data = res.json()
             assert data["message"] == "Good idea! What timeframe?"
+            # No build_intent set this turn -> not complete.
             assert data["is_complete"] is False
 
     def test_returns_spec_when_complete(self, client):
         session_id = _setup_session()
-        with patch("astra.ui.backend.main.PlannerConversation") as MockConv:
-            mock_conv = MagicMock()
-            mock_conv.reply.return_value = "SPEC_READY: {\"strategy_type\": \"momentum\"}"
-            mock_conv.is_complete.return_value = True
-            mock_conv.spec = StrategySpec(strategy_type="momentum", symbols=["SPY"])
-            MockConv.return_value = mock_conv
-
-            _deps.store.update(session_id, "conversation", mock_conv)
-
+        _deps.store.update(session_id, "assistant", MagicMock())
+        # Simulate the assistant confirming a build (sets ctx.build_intent).
+        fake_disp = MagicMock()
+        fake_disp.ctx.build_intent = StrategySpec(strategy_type="momentum", symbols=["SPY"])
+        with patch("astra.ui.backend.main._run_assistant",
+                   new=AsyncMock(return_value="Building your momentum strategy.")), \
+             patch("astra.ui.backend.main._make_dispatcher", return_value=fake_disp):
             res = client.post(f"/api/session/{session_id}/chat", json={"message": "Daily"})
             assert res.status_code == 200
             data = res.json()

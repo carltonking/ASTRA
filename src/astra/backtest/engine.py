@@ -2,6 +2,7 @@
 
 import concurrent.futures
 import importlib.util
+import inspect
 import sys
 import time
 import uuid
@@ -25,10 +26,22 @@ def import_strategy_from_file(strategy_file: str):
     sys.modules[module_name] = mod
     spec.loader.exec_module(mod)
 
-    for attr_name in dir(mod):
-        attr = getattr(mod, attr_name)
-        if isinstance(attr, type) and hasattr(attr, "STRATEGY_TYPE"):
-            return attr
+    # A generated strategy file imports BaseStrategy (an abstract ABC that also
+    # carries a STRATEGY_TYPE attr) alongside the concrete subclass. Pick the
+    # concrete strategy class — skip abstract bases and prefer a class actually
+    # defined in this module rather than one imported into its namespace.
+    candidates = [
+        getattr(mod, attr_name)
+        for attr_name in dir(mod)
+        if isinstance(getattr(mod, attr_name), type)
+        and hasattr(getattr(mod, attr_name), "STRATEGY_TYPE")
+        and not inspect.isabstract(getattr(mod, attr_name))
+    ]
+    for cls in candidates:
+        if cls.__module__ == module_name:
+            return cls
+    if candidates:
+        return candidates[0]
 
     raise ImportError(f"No strategy class found in {strategy_file}")
 

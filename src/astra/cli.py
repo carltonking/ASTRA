@@ -144,6 +144,103 @@ def cmd_run(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# autopilot subcommand: build -> backtest -> autonomous paper-trade + self-tweak
+# ---------------------------------------------------------------------------
+
+
+def cmd_autopilot(args: argparse.Namespace) -> None:
+    """Run the full autonomous loop: build, backtest, then continuously
+    paper-trade and self-optimize until the strategy graduates."""
+    from astra.alpaca.deployer import StrategyDeployer
+    from astra.alpaca.monitor import PerformanceMonitor
+    from astra.broker.factory import create_broker
+    from astra.graduation.gates import GraduationGates
+    from astra.graduation.tracker import GraduationTracker
+    from astra.optimizer.engine import OptimizationEngine
+    from astra.orchestrator import AutonomousLoop, AutopilotConfig
+    from astra.pipeline.state import PipelineState
+
+    with open(args.spec) as f:
+        spec = StrategySpec.from_json(f.read())
+
+    provider = create_llm_provider()
+    generator = StrategyGenerator(llm_provider=provider, build_dir=_build_dir())
+    build_result = generator.generate(spec)
+    if not build_result.success:
+        print(f"Build failed: {build_result.error}")
+        sys.exit(1)
+    print(f"Built: {build_result.strategy_file}")
+
+    _try_open_lseg()
+
+    event_bus = PipelineEventBus()
+    aurora = AuroraBridge(data_dir=os.path.join(_build_dir(), ".aurora_data"))
+    runner = PipelineRunner(
+        llm_provider=provider,
+        alpaca_paper_key=os.environ.get("APCA_API_KEY_ID", ""),
+        alpaca_paper_secret=os.environ.get("APCA_API_SECRET_KEY", ""),
+        alpaca_base_url=os.environ.get("APCA_PAPER_URL", "https://paper-api.alpaca.markets"),
+        build_dir=_build_dir(),
+        aurora_bridge=aurora,
+        event_bus=event_bus,
+    )
+
+    # Validate via a backtest before risking any (paper) capital.
+    state = PipelineState(session_id=spec.spec_id, spec=spec, build_result=build_result)
+    state.transition_to("BUILDING")
+    state.transition_to("RUNNING")
+    pipeline_result = runner.run(build_result, spec)
+    state.pipeline_results.append(pipeline_result)
+    print(f"Backtest: {pipeline_result.status}")
+    if pipeline_result.status not in ("DEPLOYED_PAPER", "PASSED"):
+        print(f"  Strategy did not pass validation ({pipeline_result.status}); not deploying.")
+        if pipeline_result.error:
+            print(f"  {pipeline_result.error}")
+        _try_close_lseg()
+        sys.exit(1)
+
+    broker = create_broker(
+        broker="alpaca",
+        api_key=os.environ.get("APCA_API_KEY_ID", ""),
+        api_secret=os.environ.get("APCA_API_SECRET_KEY", ""),
+        base_url=os.environ.get("APCA_PAPER_URL", "https://paper-api.alpaca.markets"),
+    )
+    loop = AutonomousLoop(
+        deployer=StrategyDeployer(broker=broker, event_bus=event_bus),
+        monitor=PerformanceMonitor(broker),
+        gates=GraduationGates(),
+        tracker=GraduationTracker(session_id=spec.spec_id),
+        state=state,
+        build_result=build_result,
+        spec=spec,
+        event_bus=event_bus,
+        optimization_engine=OptimizationEngine(provider, runner, event_bus),
+        config=AutopilotConfig(
+            interval_seconds=args.interval,
+            max_ticks=args.max_ticks,
+            graduation_confirmations=args.confirmations,
+            optimize_on_degradation=not args.no_optimize,
+        ),
+    )
+
+    if args.once:
+        tick = loop.tick()
+        print(f"Tick {tick.tick}: {tick.action} — {tick.message}")
+    else:
+        print(f"Autopilot running (interval={args.interval}s, max_ticks={args.max_ticks}). Ctrl-C to stop.")
+        try:
+            result = loop.run_forever()
+            print(f"\nAutopilot finished: {result.status} after {result.ticks} ticks")
+            print(f"  {result.message}")
+            if result.certificate is not None:
+                print("  Strategy GRADUATED — export it with 'astra export' and run live yourself.")
+        except KeyboardInterrupt:
+            print("\nAutopilot interrupted.")
+
+    _try_close_lseg()
+
+
+# ---------------------------------------------------------------------------
 # export subcommand: re-export an already-built strategy
 # ---------------------------------------------------------------------------
 
@@ -263,6 +360,14 @@ def main() -> None:
     p_run.add_argument("--export", "-e", action="store_true",
                        help="Export the result after running")
 
+    p_auto = sub.add_parser("autopilot", help="Autonomous loop: build, backtest, paper-trade and self-optimize until graduation")
+    p_auto.add_argument("spec", help="Path to StrategySpec JSON file")
+    p_auto.add_argument("--interval", type=int, default=3600, help="Seconds between trading ticks (default 3600)")
+    p_auto.add_argument("--max-ticks", type=int, default=1000, help="Max ticks before stopping (default 1000)")
+    p_auto.add_argument("--confirmations", type=int, default=3, help="Consecutive passing gate checks required to graduate (default 3)")
+    p_auto.add_argument("--no-optimize", action="store_true", help="Disable self-optimization on degradation")
+    p_auto.add_argument("--once", action="store_true", help="Run a single tick and exit (for testing)")
+
     p_export = sub.add_parser("export", help="Export an already-built strategy")
     p_export.add_argument("spec", help="Path to StrategySpec JSON file")
     p_export.add_argument("--build-result", "-b", help="Path to BuildResult JSON file")
@@ -273,6 +378,7 @@ def main() -> None:
         "plan": cmd_plan,
         "build": cmd_build,
         "run": cmd_run,
+        "autopilot": cmd_autopilot,
         "export": cmd_export,
     }
     commands[args.command](args)

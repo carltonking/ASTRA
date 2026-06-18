@@ -55,7 +55,11 @@ class GraduationGates:
     def __init__(self, config: dict[str, Any] | None = None):
         cfg = config or {}
         self._thresholds = {
-            "dsr": float(cfg.get("MIN_DSR", os.environ.get("MIN_DSR", 1.5))),
+            # DSR (compute_deflated_sharpe_ratio) is a probability in [0,1] — the
+            # confidence that the strategy's Sharpe beats the multiple-testing
+            # adjusted null. A ratio-scale threshold (e.g. 1.5) is unreachable;
+            # 0.95 means "95% confident the edge is real".
+            "dsr": float(cfg.get("MIN_DSR", os.environ.get("MIN_DSR", 0.95))),
             "annual_return": float(cfg.get("MIN_ANNUAL_RETURN", os.environ.get("MIN_ANNUAL_RETURN", 0.05))),
             "max_drawdown": float(cfg.get("MAX_DRAWDOWN", os.environ.get("MAX_DRAWDOWN", 0.20))),
             "min_trades": float(cfg.get("MIN_TRADES", os.environ.get("MIN_TRADES", 20))),

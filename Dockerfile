@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 ENV PIP_NO_CACHE_DIR=1
-COPY pyproject.toml .
+COPY pyproject.toml uv.lock ./
 RUN pip install uv \
  && uv sync --no-dev --no-install-project
 COPY src/ src/

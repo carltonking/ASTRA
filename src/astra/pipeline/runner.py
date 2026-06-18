@@ -76,6 +76,7 @@ class PipelineRunner:
         self._event_bus = event_bus or PipelineEventBus()
 
         self._deployer: Any | None = None
+        self._last_deployment: Any | None = None
 
     def run(self, build_result: BuildResult, spec: StrategySpec) -> PipelineResult:
         pipeline_id = str(uuid.uuid4())
@@ -260,6 +261,9 @@ class PipelineRunner:
                 spec=spec,
                 pipeline_result=pipeline_result,
             )
+            # Retain the live Deployment + deployer so the backend can drive
+            # recurring trade cycles (PaperTradingLoop) against the current market.
+            self._last_deployment = deployment
             return deployment.deployment_id
         except Exception as e:
             print(f"Paper deployment failed, using stub: {e}")

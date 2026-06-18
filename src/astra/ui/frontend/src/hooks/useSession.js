@@ -12,15 +12,28 @@ export default function useSession() {
   const [isComplete, setIsComplete] = useState(false);
   const [sessionState, setSessionState] = useState(null);
 
+  const clearSession = useCallback(() => {
+    setSessionId(null);
+    setMessages([]);
+    setSpec(null);
+    setIsComplete(false);
+    setSessionState(null);
+    localStorage.removeItem('astra_session_id');
+  }, []);
+
   const fetchState = useCallback(async () => {
     if (!sessionId) return;
     try {
       const res = await API.get(`/session/${sessionId}/state`);
       setSessionState(res.data);
     } catch (err) {
-      console.warn('Failed to fetch state', err);
+      if (err.response?.status === 404) {
+        clearSession();
+      } else {
+        console.warn('Failed to fetch state', err);
+      }
     }
-  }, [sessionId]);
+  }, [sessionId, clearSession]);
 
   useEffect(() => {
     if (sessionId) {
@@ -80,14 +93,7 @@ export default function useSession() {
     }
   }, [sessionId]);
 
-  const newSession = useCallback(() => {
-    setSessionId(null);
-    setMessages([]);
-    setSpec(null);
-    setIsComplete(false);
-    setSessionState(null);
-    localStorage.removeItem('astra_session_id');
-  }, []);
+  const newSession = clearSession
 
   return {
     sessionId, messages, loading, spec, isComplete, sessionState,

@@ -20,6 +20,9 @@ from astra.llm import create_llm_provider
 from astra.llm.provider import LLMProvider
 from astra.planner.spec import StrategySpec
 from astra.planner.conversation import PlannerConversation
+from astra.planner.assistant import AstraAssistant
+from astra.planner.tool_dispatcher import ToolContext, ToolDispatcher
+from astra.backtest.engine import BacktestEngine
 from astra.builder.generator import StrategyGenerator
 from astra.pipeline.state import PipelineState, InvalidStatusTransition
 from astra.pipeline.runner import PipelineRunner
@@ -32,6 +35,11 @@ from astra.export.report import ReportGenerator
 from astra.storage import Storage
 from astra.ui.backend.session_store import SessionStore
 from astra.ui.backend.websocket import ws_manager
+from astra.api.research import router as research_router
+from astra.api.security import OptionalApiKeyMiddleware
+from astra.db import Database
+from astra.db.recorder import ProductionRecorder
+from astra.events import DurablePipelineEventBridge, RedisEventBus
 
 # Load .env from repo root
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[4] / ".env")
@@ -55,6 +63,7 @@ class AppDependencies:
         self.packager = StrategyPackager(export_dir=self.export_dir)
         self.report_generator = ReportGenerator(export_dir=self.export_dir)
         self.graduation_gates = GraduationGates()
+        self.recorder = ProductionRecorder()
         self._llm_provider: LLMProvider | None = None
 
     def get_llm_provider(self) -> LLMProvider:
@@ -62,10 +71,16 @@ class AppDependencies:
             self._llm_provider = create_llm_provider()
         return self._llm_provider
 
-    def get_conversation(self) -> PlannerConversation:
-        return PlannerConversation(llm_provider=self.get_llm_provider())
+    def get_assistant(self) -> AstraAssistant:
+        return AstraAssistant(llm_provider=self.get_llm_provider())
 
     def get_runner(self, event_bus: PipelineEventBus | None = None) -> PipelineRunner:
+        if event_bus is not None and os.environ.get("ASTRA_ENABLE_DURABLE_EVENTS", "0") == "1":
+            DurablePipelineEventBridge(
+                pipeline_bus=event_bus,
+                durable_bus=RedisEventBus(db=Database()),
+                aggregate_id="ui",
+            )
         return PipelineRunner(
             llm_provider=self.get_llm_provider(),
             alpaca_paper_key=self.alpaca_key,
@@ -81,6 +96,10 @@ _deps = AppDependencies()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Capture the running loop so worker threads (assistant tools) can stream WS events.
+    import asyncio
+    ws_manager.set_loop(asyncio.get_running_loop())
+
     try:
         _deps.get_llm_provider()
         app.state.llm_available = True
@@ -105,6 +124,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="ASTRA", version="0.1.0", lifespan=lifespan)
+app.include_router(research_router)
+app.add_middleware(OptionalApiKeyMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -228,6 +249,12 @@ async def broker_cancel_order(order_id: str):
 @app.post("/api/broker/orders")
 async def broker_place_order(symbol: str, qty: float, side: str, order_type: str = "market", time_in_force: str = "day"):
     """Place an order via backend."""
+    if os.environ.get("ASTRA_ENABLE_MANUAL_PAPER_ORDERS", "0") != "1":
+        raise HTTPException(status_code=403, detail="Manual paper orders disabled")
+    if side.lower() not in {"buy", "sell"}:
+        raise HTTPException(status_code=400, detail="Invalid order side")
+    if side.lower() == "sell":
+        raise HTTPException(status_code=403, detail="Sell orders must use managed close-position flow")
     from astra.broker.factory import create_broker
     broker = create_broker()
     try:
@@ -277,67 +304,115 @@ async def broker_monitoring(session_id: str):
     }
 
 
+def _make_dispatcher(session_id: str, session: dict[str, Any]) -> ToolDispatcher:
+    """Build a per-request tool context wired to this session's engine + WS stream."""
+    engine = session.get("engine")
+    if engine is None:
+        engine = BacktestEngine()
+        session["engine"] = engine
+    ctx = ToolContext(
+        session_id=session_id,
+        engine=engine,
+        emit=lambda ev, data: ws_manager.broadcast(session_id, ev, data),
+    )
+    return ToolDispatcher(ctx)
+
+
+def _is_rate_limit(err: Exception) -> bool:
+    s = str(err).lower()
+    return "429" in s or "resource_exhausted" in s or "rate limit" in s or "quota" in s
+
+
+async def _run_assistant(assistant: AstraAssistant, dispatcher: ToolDispatcher, message: str, first: bool) -> str:
+    """Run the (blocking) assistant tool loop off the event loop."""
+    import asyncio
+    fn = assistant.start if first else assistant.reply
+    return await asyncio.to_thread(fn, message, dispatcher)
+
+
 @app.post("/api/session/start")
 async def start_session(req: StartRequest):
-    """Start a new planning session. Creates a session and begins LLM conversation."""
+    """Start a new session. Creates a session and begins the assistant conversation."""
     session_id = str(uuid.uuid4())
     _deps.store.create(session_id)
+    session = _deps.store.get(session_id)
 
+    assistant = _deps.get_assistant()
+    dispatcher = _make_dispatcher(session_id, session)
     try:
-        conv = _deps.get_conversation()
-        response = conv.start(req.user_idea)
+        response = await _run_assistant(assistant, dispatcher, req.user_idea, first=True)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Conversation start failed: {e}")
+        if _is_rate_limit(e):
+            response = "I'm being rate-limited by the LLM provider's free tier right now. Please wait a minute and try again."
+        else:
+            raise HTTPException(status_code=500, detail=f"Conversation start failed: {e}")
 
-    _deps.store.update(session_id, "conversation", conv)
+    _deps.store.update(session_id, "assistant", assistant)
 
-    state = _deps.store.get(session_id)["state"]
+    state = session["state"]
     state.spec = StrategySpec(user_idea=req.user_idea)
 
-    return {
+    result = {
         "session_id": session_id,
         "message": response,
-        "conversation_history": conv.get_history(),
+        "conversation_history": assistant.get_history(),
         "disclaimer": _DISCLAIMER,
     }
+    _maybe_trigger_build(session_id, session, dispatcher)
+    return result
 
 
 @app.post("/api/session/{session_id}/chat")
 async def chat(session_id: str, req: ChatRequest):
-    """Send a chat message in the planning conversation. Returns updated status and spec when complete."""
+    """Send a chat message. Answers finance questions, researches algorithms, or builds on confirmation."""
     session = _deps.store.get(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    conv: PlannerConversation | None = session.get("conversation")
-    if conv is None:
+    assistant: AstraAssistant | None = session.get("assistant")
+    if assistant is None:
         raise HTTPException(status_code=400, detail="No active conversation")
 
+    dispatcher = _make_dispatcher(session_id, session)
     try:
-        response = conv.reply(req.message)
+        response = await _run_assistant(assistant, dispatcher, req.message, first=False)
     except Exception as e:
+        if _is_rate_limit(e):
+            return {"message": "I'm being rate-limited by the LLM provider's free tier. Wait a minute and try again.", "is_complete": False, "spec": None}
         raise HTTPException(status_code=500, detail=f"Chat failed: {e}")
 
-    _deps.store.update(session_id, "conversation", conv)
+    _deps.store.update(session_id, "assistant", assistant)
 
+    spec = dispatcher.ctx.build_intent
     result: dict[str, Any] = {
         "message": response,
-        "is_complete": conv.is_complete(),
+        "is_complete": spec is not None,
         "spec": None,
     }
-
-    if conv.is_complete() and conv.spec is not None:
-        state = session["state"]
-        state.spec = conv.spec
-        try:
-            state.transition_to("BUILDING")
-        except InvalidStatusTransition:
-            pass
-
-        result["spec"] = _spec_to_dict(conv.spec)
-        _trigger_build(session_id, session, state)
-
+    _maybe_trigger_build(session_id, session, dispatcher, result)
     return result
+
+
+def _maybe_trigger_build(
+    session_id: str,
+    session: dict[str, Any],
+    dispatcher: ToolDispatcher,
+    result: dict[str, Any] | None = None,
+) -> None:
+    """If the assistant confirmed a build this turn, run the existing build pipeline."""
+    spec = dispatcher.ctx.build_intent
+    if spec is None:
+        return
+    state = session["state"]
+    state.spec = spec
+    try:
+        state.transition_to("BUILDING")
+    except InvalidStatusTransition:
+        pass
+    if result is not None:
+        result["spec"] = _spec_to_dict(spec)
+        result["is_complete"] = True
+    _trigger_build(session_id, session, state)
 
 
 @app.get("/api/session/{session_id}/state")
@@ -480,6 +555,59 @@ async def get_graduation(session_id: str):
     }
 
 
+class AutopilotStartRequest(BaseModel):
+    interval_seconds: int | None = None
+    confirmations: int | None = None
+
+
+@app.post("/api/session/{session_id}/autopilot/start")
+async def start_autopilot(session_id: str, req: AutopilotStartRequest | None = None):
+    """Start the autonomous self-improving loop for a session (paper-only)."""
+    session = _deps.store.get(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    existing = _autopilots.get(session_id)
+    if existing is not None and existing.is_running():
+        return {"running": True, "already_running": True, "status": existing.status()}
+
+    # The autopilot drives its own trade cycles — stop the basic paper loop so
+    # the deployment is not double-traded.
+    basic = _paper_loops.pop(session_id, None)
+    if basic is not None:
+        basic.stop()
+
+    req = req or AutopilotStartRequest()
+    pilot = _build_autopilot(session_id, session, req.interval_seconds, req.confirmations)
+    pilot.start()
+    _autopilots[session_id] = pilot
+    ws_manager.broadcast(session_id, "autopilot.started", {})
+    return {"running": True, "status": pilot.status(), "disclaimer": _DISCLAIMER}
+
+
+@app.post("/api/session/{session_id}/autopilot/stop")
+async def stop_autopilot(session_id: str):
+    """Stop the autonomous loop for a session."""
+    pilot = _autopilots.get(session_id)
+    if pilot is None:
+        raise HTTPException(status_code=404, detail="No autopilot for this session")
+    pilot.stop()
+    status = pilot.status()
+    ws_manager.broadcast(session_id, "autopilot.stopped", {"status": status})
+    return {"running": False, "status": status}
+
+
+@app.get("/api/session/{session_id}/autopilot/status")
+async def autopilot_status(session_id: str):
+    """Current autopilot state for a session."""
+    pilot = _autopilots.get(session_id)
+    if pilot is None:
+        return {"active": False, "running": False}
+    status = pilot.status()
+    status["active"] = True
+    return status
+
+
 @app.post("/api/session/{session_id}/export")
 async def export_strategy(session_id: str):
     """Export a graduated strategy as a standalone package + PDF report."""
@@ -583,6 +711,88 @@ def _spec_to_dict(spec: StrategySpec) -> dict[str, Any]:
     return data
 
 
+# Live paper-trading loops keyed by session_id, so deployed strategies keep
+# trading the current market in the background after the pipeline finishes.
+_paper_loops: dict[str, Any] = {}
+# Autonomous self-improving loops keyed by session_id (the autopilot).
+_autopilots: dict[str, Any] = {}
+
+
+def _build_autopilot(session_id: str, session: dict[str, Any], interval_seconds: int | None,
+                     confirmations: int | None):
+    """Construct a ThreadedAutopilot for a session from its built strategy."""
+    from astra.alpaca.deployer import StrategyDeployer
+    from astra.alpaca.monitor import PerformanceMonitor
+    from astra.broker.factory import create_broker
+    from astra.optimizer.engine import OptimizationEngine
+    from astra.orchestrator import AutonomousLoop, AutopilotConfig, ThreadedAutopilot
+
+    state = session.get("state")
+    if state is None or state.spec is None or state.build_result is None:
+        raise HTTPException(status_code=400, detail="Session has no built strategy yet")
+
+    event_bus = PipelineEventBus()
+    event_bus.subscribe(lambda event, data: ws_manager.broadcast(session_id, event, data))
+
+    broker = create_broker(
+        broker="alpaca",
+        api_key=_deps.alpaca_key,
+        api_secret=_deps.alpaca_secret,
+        base_url=_deps.alpaca_url,
+    )
+    runner = _deps.get_runner(event_bus=event_bus)
+
+    # Fresh tracker per autopilot run so per-tick cycle numbers never collide.
+    tracker = GraduationTracker(session_id=session_id)
+    _deps.store.update(session_id, "graduation_tracker", tracker)
+
+    cfg = AutopilotConfig.from_env()
+    if interval_seconds is not None:
+        cfg.interval_seconds = max(1, int(interval_seconds))
+    if confirmations is not None:
+        cfg.graduation_confirmations = max(1, int(confirmations))
+
+    loop = AutonomousLoop(
+        deployer=StrategyDeployer(broker=broker, event_bus=event_bus),
+        monitor=PerformanceMonitor(broker),
+        gates=_deps.graduation_gates,
+        tracker=tracker,
+        state=state,
+        build_result=state.build_result,
+        spec=state.spec,
+        event_bus=event_bus,
+        optimization_engine=OptimizationEngine(_deps.get_llm_provider(), runner, event_bus),
+        config=cfg,
+    )
+    return ThreadedAutopilot(loop)
+
+
+def _start_paper_trading_loop(session_id: str, runner: Any) -> None:
+    """Start a background loop that runs trade cycles against the live market.
+
+    No-ops unless the runner actually deployed to Alpaca paper (a real Deployment
+    object is retained). Interval is configurable via ASTRA_PAPER_CYCLE_SECONDS.
+    """
+    deployer = getattr(runner, "_deployer", None)
+    deployment = getattr(runner, "_last_deployment", None)
+    if deployer is None or deployment is None:
+        return
+    # Replace any prior loop for this session (e.g. after re-deploy).
+    existing = _paper_loops.pop(session_id, None)
+    if existing is not None:
+        existing.stop()
+
+    from astra.alpaca.trading_loop import PaperTradingLoop
+
+    interval = int(os.environ.get("ASTRA_PAPER_CYCLE_SECONDS", "60"))
+    loop = PaperTradingLoop(
+        deployer=deployer,
+        deployment=deployment,
+        interval_seconds=interval,
+    ).start()
+    _paper_loops[session_id] = loop
+
+
 def _trigger_build(session_id: str, session: dict[str, Any], state: PipelineState) -> None:
     import threading
 
@@ -594,6 +804,7 @@ def _trigger_build(session_id: str, session: dict[str, Any], state: PipelineStat
             )
             result = gen.generate(state.spec)
             state.build_result = result
+            _deps.recorder.record_build(state.spec, result)
             state.transition_to("RUNNING")
             _deps.store.update(session_id, "state", state)
             ws_manager.broadcast(session_id, "pipeline.build_complete", {"success": result.success})
@@ -605,6 +816,7 @@ def _trigger_build(session_id: str, session: dict[str, Any], state: PipelineStat
                 event_bus.subscribe(forward_event)
                 runner = _deps.get_runner(event_bus=event_bus)
                 pipeline_result = runner.run(result, state.spec)
+                _deps.recorder.record_pipeline(state.spec, pipeline_result)
                 state.pipeline_results.append(pipeline_result)
                 state.paper_deployment_id = pipeline_result.paper_deployment_id
                 state.transition_to("PAPER_TRADING")
@@ -613,6 +825,10 @@ def _trigger_build(session_id: str, session: dict[str, Any], state: PipelineStat
                     "status": pipeline_result.status,
                     "deployment_id": pipeline_result.paper_deployment_id,
                 })
+
+                # Auto-start live paper trading: drive recurring trade cycles against
+                # the current market so the equity curve reflects real-time performance.
+                _start_paper_trading_loop(session_id, runner)
 
                 tracker = GraduationTracker(session_id=session_id)
                 snapshot = PerformanceSnapshot(deployment_id=pipeline_result.paper_deployment_id or "")

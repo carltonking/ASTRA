@@ -197,8 +197,15 @@ class CPCVBacktest:
         neg_count = sum(1 for s in path_sharpes if s < 0)
         overfit_prob = neg_count / len(path_sharpes) if path_sharpes else 1.0
 
-        # Aggregate metrics — mean path equity avoids O(n log n) groupby sort
-        mean_equity = sum(r["equity"] for r in path_results) / len(path_results)
+        # Aggregate metrics — align path equity curves on their index before
+        # averaging. Paths cover different test segments, so a plain element-wise
+        # sum injects NaN on non-overlapping timestamps, which then propagates
+        # through drawdown/return as NaN. concat(axis=1).mean ignores gaps.
+        mean_equity = (
+            pd.concat([r["equity"] for r in path_results], axis=1, sort=True)
+            .mean(axis=1)
+            .dropna()
+        )
         all_returns_flat = pd.concat([r["returns"] for r in path_results])
 
         max_dd = compute_max_drawdown(mean_equity)

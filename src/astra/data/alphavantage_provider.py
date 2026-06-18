@@ -16,6 +16,10 @@ BASE_URL = "https://www.alphavantage.co/query"
 class AlphaVantageProvider(DataProvider):
     def __init__(self, api_key: str | None = None):
         self._api_key = api_key or os.getenv("ALPHA_VANTAGE_API_KEY", "")
+        # `outputsize=full` is a premium-only feature on the free tier and
+        # returns an error string instead of data. Default to "compact" (last
+        # 100 points) so free keys work; premium users set the env to "full".
+        self._outputsize = os.getenv("ASTRA_ALPHAVANTAGE_OUTPUTSIZE", "compact")
         self._session = requests.Session()
         self._session.headers.update({"User-Agent": "ASTRA/1.0"})
 
@@ -32,7 +36,8 @@ class AlphaVantageProvider(DataProvider):
         end: str,
         interval: str = "1D",
     ) -> dict[str, pd.DataFrame]:
-        function, outputsize = self._parse_interval(interval)
+        function, _ = self._parse_interval(interval)
+        outputsize = self._outputsize
         dfs: dict[str, pd.DataFrame] = {}
         for symbol in symbols:
             df = self._fetch_single(symbol, function, outputsize)

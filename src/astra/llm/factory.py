@@ -11,7 +11,12 @@ from astra.llm.errors import LLMConfigurationError
 _PROVIDER_REGISTRY: dict[str, type[LLMProvider]] = {
     "anthropic": AnthropicProvider,
     "openai": OpenAIProvider,
+    # Gemini speaks the OpenAI-compatible API, so it reuses OpenAIProvider
+    # pointed at Google's endpoint. Free tier: ~1500 req/day, no card.
+    "gemini": OpenAIProvider,
 }
+
+_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 
 def register_provider(name: str, provider_cls: type[LLMProvider]) -> None:
@@ -49,20 +54,29 @@ def create_llm_provider(
             f"Available: {', '.join(sorted(_PROVIDER_REGISTRY))}"
         )
 
+    base_url: str | None = None
     if provider_name == "anthropic":
         resolved_api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
         resolved_model = model or "claude-sonnet-4-20250514"
     elif provider_name == "openai":
         resolved_api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
         resolved_model = model or "gpt-4o"
+    elif provider_name == "gemini":
+        resolved_api_key = api_key or os.environ.get("GEMINI_API_KEY", "")
+        resolved_model = model or os.environ.get("ASTRA_LLM_MODEL", "gemini-2.5-flash")
+        base_url = _GEMINI_BASE_URL
     else:
         resolved_api_key = api_key or ""
         resolved_model = model or ""
 
-    inner: LLMProvider = provider_cls(
-        api_key=resolved_api_key,
-        model=resolved_model,
-    )
+    provider_kwargs: dict[str, object] = {
+        "api_key": resolved_api_key,
+        "model": resolved_model,
+    }
+    if base_url is not None:
+        provider_kwargs["base_url"] = base_url
+
+    inner: LLMProvider = provider_cls(**provider_kwargs)
 
     if max_retries > 0:
         return RetryingProvider(inner, max_retries=max_retries)

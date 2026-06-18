@@ -218,6 +218,16 @@ class StrategyPackager:
             f'    "paper_days_deployed": {snapshot.days_deployed!r},',
             f'    "paper_total_trades": {snapshot.total_trades!r},',
             f'    "pipeline_id": {pipeline_result.pipeline_id!r},',
+            f'    "strategy_hash": {build_result.strategy_hash!r},',
+            f'    "spec_hash": {build_result.spec_hash!r},',
+            f'    "prompt_hash": {build_result.prompt_hash!r},',
+            f'    "metadata_file": {os.path.basename(build_result.metadata_file)!r},',
+            f'    "lineage_file": {os.path.basename(build_result.lineage_file)!r},',
+            f'    "parent_strategy_id": {spec.parent_strategy_id!r},',
+            f'    "mutation_source": {spec.mutation_source!r},',
+            f'    "generation_number": {spec.generation_number!r},',
+            f'    "validation_scores": {spec.validation_scores!r},',
+            f'    "failure_reasons": {spec.failure_reasons!r},',
             "}",
         ]
         metadata_block = "\n".join(metadata_dict_lines)

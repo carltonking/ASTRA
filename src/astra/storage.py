@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA_SQL_V1 = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -69,6 +69,21 @@ CREATE TABLE IF NOT EXISTS param_presets (
 
 CREATE INDEX IF NOT EXISTS idx_exports_session ON exports(session_id);
 CREATE INDEX IF NOT EXISTS idx_presets_session ON param_presets(session_id);
+CREATE TABLE IF NOT EXISTS strategy_lineage (
+    strategy_id TEXT PRIMARY KEY,
+    spec_id TEXT NOT NULL,
+    parent_strategy_id TEXT,
+    mutation_source TEXT,
+    generation_number INTEGER DEFAULT 0,
+    prompt_hash TEXT DEFAULT '',
+    metadata_path TEXT DEFAULT '',
+    lineage_json TEXT NOT NULL,
+    validation_scores_json TEXT DEFAULT '{}',
+    failure_reasons_json TEXT DEFAULT '[]',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_lineage_parent ON strategy_lineage(parent_strategy_id);
+CREATE INDEX IF NOT EXISTS idx_lineage_spec ON strategy_lineage(spec_id);
 CREATE TABLE IF NOT EXISTS _migrations (
     version INTEGER PRIMARY KEY,
     applied_at TEXT NOT NULL
@@ -79,6 +94,23 @@ MIGRATIONS = {
     2: """
 ALTER TABLE sessions ADD COLUMN tags TEXT DEFAULT '';
 ALTER TABLE deployments ADD COLUMN notes TEXT DEFAULT '';
+""",
+    3: """
+CREATE TABLE IF NOT EXISTS strategy_lineage (
+    strategy_id TEXT PRIMARY KEY,
+    spec_id TEXT NOT NULL,
+    parent_strategy_id TEXT,
+    mutation_source TEXT,
+    generation_number INTEGER DEFAULT 0,
+    prompt_hash TEXT DEFAULT '',
+    metadata_path TEXT DEFAULT '',
+    lineage_json TEXT NOT NULL,
+    validation_scores_json TEXT DEFAULT '{}',
+    failure_reasons_json TEXT DEFAULT '[]',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_lineage_parent ON strategy_lineage(parent_strategy_id);
+CREATE INDEX IF NOT EXISTS idx_lineage_spec ON strategy_lineage(spec_id);
 """,
 }
 
@@ -138,6 +170,7 @@ class Storage:
     def conn(self) -> sqlite3.Connection:
         if self._conn is None:
             self.connect()
+        assert self._conn is not None
         return self._conn
 
     # ---- Sessions ----
@@ -287,6 +320,58 @@ class Storage:
     def delete_preset(self, preset_id: str) -> None:
         self.conn.execute("DELETE FROM param_presets WHERE preset_id = ?", (preset_id,))
         self.conn.commit()
+
+    # ---- Strategy Lineage ----
+
+    def save_strategy_lineage(
+        self,
+        strategy_id: str,
+        spec_id: str,
+        lineage_json: str,
+        parent_strategy_id: str | None = None,
+        mutation_source: str | None = None,
+        generation_number: int = 0,
+        prompt_hash: str = "",
+        metadata_path: str = "",
+        validation_scores_json: str = "{}",
+        failure_reasons_json: str = "[]",
+    ) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        self.conn.execute(
+            """INSERT OR REPLACE INTO strategy_lineage
+               (strategy_id, spec_id, parent_strategy_id, mutation_source,
+                generation_number, prompt_hash, metadata_path, lineage_json,
+                validation_scores_json, failure_reasons_json, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                strategy_id,
+                spec_id,
+                parent_strategy_id,
+                mutation_source,
+                generation_number,
+                prompt_hash,
+                metadata_path,
+                lineage_json,
+                validation_scores_json,
+                failure_reasons_json,
+                now,
+            ),
+        )
+        self.conn.commit()
+
+    def get_strategy_lineage(self, strategy_id: str) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            "SELECT * FROM strategy_lineage WHERE strategy_id = ?",
+            (strategy_id,),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def get_strategy_children(self, strategy_id: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT * FROM strategy_lineage WHERE parent_strategy_id = ? ORDER BY generation_number ASC, created_at ASC",
+            (strategy_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     def __enter__(self):
         self.connect()

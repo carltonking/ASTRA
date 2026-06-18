@@ -1,5 +1,6 @@
 """WebSocket manager — bridges PipelineEventBus to frontend clients."""
 
+import asyncio
 import json
 from datetime import datetime, timezone
 from typing import Any
@@ -11,6 +12,11 @@ class WebSocketManager:
     def __init__(self) -> None:
         self._connections: dict[str, list[WebSocket]] = {}
         self._event_histories: dict[str, list[dict[str, Any]]] = {}
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+    def set_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Capture the main event loop so worker threads can schedule sends."""
+        self._loop = loop
 
     async def connect(self, session_id: str, websocket: WebSocket) -> None:
         await websocket.accept()
@@ -47,14 +53,22 @@ class WebSocketManager:
             "session_id": session_id,
         })
         conns = self._connections.get(session_id, [])
+        if not conns:
+            return
+
+        loop = self._loop
         for ws in conns[:]:
             try:
-                import asyncio
-                loop = asyncio.new_event_loop()
-                loop.run_until_complete(ws.send_text(message))
-                loop.close()
+                if loop is not None and loop.is_running():
+                    # Schedule onto the main loop — safe from any thread (incl. asyncio.to_thread workers).
+                    asyncio.run_coroutine_threadsafe(ws.send_text(message), loop)
+                else:
+                    asyncio.run(ws.send_text(message))
             except Exception:
-                conns.remove(ws)
+                try:
+                    conns.remove(ws)
+                except ValueError:
+                    pass
 
 
 ws_manager = WebSocketManager()

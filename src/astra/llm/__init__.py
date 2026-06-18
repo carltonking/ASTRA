@@ -6,6 +6,7 @@ from astra.llm.openai_provider import OpenAIProvider
 from astra.llm.factory import create_llm_provider
 from astra.llm.retry import RetryingProvider
 from astra.llm.errors import LLMProviderError, LLMConfigurationError
+from astra.llm.tools import ToolSpec, ToolCall, ToolResult, ToolCallResult
 
 __all__ = [
     "LLMProvider",
@@ -15,4 +16,8 @@ __all__ = [
     "RetryingProvider",
     "LLMProviderError",
     "LLMConfigurationError",
+    "ToolSpec",
+    "ToolCall",
+    "ToolResult",
+    "ToolCallResult",
 ]
