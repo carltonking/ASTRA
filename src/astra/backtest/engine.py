@@ -216,7 +216,8 @@ class BacktestEngine:
                 n_splits=n_splits,
             )
 
-        feat_key = signals_key.replace("signals_", "features_", 1) if signals_key else ""
+        # signals_key is f"signals_{features_key}"; invert by stripping the prefix.
+        feat_key = signals_key[len("signals_"):] if signals_key.startswith("signals_") else ""
         features = self._features_cache.get(feat_key, {}) if feat_key else {}
 
         cpcv = CPCVBacktest(

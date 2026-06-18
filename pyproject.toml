@@ -21,11 +21,21 @@ dependencies = [
     "reportlab>=4.0.0",
     "openai>=1.0.0",
     "scipy>=1.11.0",
+    "SQLAlchemy>=2.0.0",
+    "alembic>=1.13.0",
+    "asyncpg>=0.29.0",
+    "greenlet>=3.0.0",
+    "redis>=5.0.0",
 ]
 
 [project.optional-dependencies]
 lseg = ["lseg-data>=1.0.0"]
 ibkr = ["ib_insync>=0.9.0"]
+# AURORA research-validation engine (CPCV, leakage detection, review board).
+# Optional: when installed, AuroraBridge delegates validation to AURORA;
+# otherwise it falls back to the built-in BacktestEngine. Activate locally with:
+#   uv sync --extra aurora
+aurora = ["aurora-trading-research"]
 test = [
     "pytest>=8.0.0",
     "hypothesis>=6.0.0",
@@ -34,12 +44,17 @@ test = [
 ]
 [dependency-groups]
 dev = [
+    "aiosqlite>=0.19.0",
     "openai>=1.0.0",
     "pytest>=8.0.0",
     "hypothesis>=6.0.0",
     "ruff>=0.5.0",
     "pyright>=1.1.370",
 ]
+
+[tool.uv.sources]
+# Sibling project on disk. Relative to this pyproject.toml.
+aurora-trading-research = { path = "../04 - A.U.R.O.R.A", editable = true }
 
 [project.urls]
 Homepage = "https://github.com/carltonking/astra-trading-agent"
